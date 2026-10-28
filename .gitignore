@@ -1,0 +1,32 @@
+# 2026-10-28 - smart-voca - Git 추적 제외 목록
+# 파일 위치: .gitignore
+
+# 비밀정보 (CLAUDE.md 코드 작성 규칙 5)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 로그·백업·임시
+logs/
+backups/
+*.log
+*.tmp
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
