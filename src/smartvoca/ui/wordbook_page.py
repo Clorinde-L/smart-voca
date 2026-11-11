@@ -5,11 +5,20 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ..core.models import WordbookSource
 from ..session import AppSession
-from .widgets import PAGE_MARGIN, SPACING, PageHeader, add_shortcut, hint_label, set_font
+from .widgets import (
+    PAGE_MARGIN,
+    SPACING,
+    PageHeader,
+    add_shortcut,
+    hint_label,
+    make_button,
+    make_panel,
+    text_label,
+)
 
 
 class WordbookPage(QWidget):
@@ -32,10 +41,8 @@ class WordbookPage(QWidget):
         self.header.back_clicked.connect(self.back_clicked)
         layout.addWidget(self.header)
 
-        self.current_label = QLabel("")
-        set_font(self.current_label, 12, bold=True)
+        self.current_label = text_label("", 13, bold=True)
         layout.addWidget(self.current_label)
-        layout.addSpacing(8)
 
         self.import_button, _ = self._add_action(
             layout,
@@ -43,30 +50,43 @@ class WordbookPage(QWidget):
             "CSV 파일(word,meaning)을 단어장으로 씁니다. "
             "단어장을 바꾸면 학습 기록이 모두 지워집니다.\n"
             "기본 단어장으로 되돌리려면 data/toeic_words_2000.csv 를 불러오세요.",
+            "불러오기",
             self.import_clicked,
         )
         self.export_wordbook_button, _ = self._add_action(
             layout,
             "단어장 내보내기",
             "현재 단어장을 CSV 파일로 저장합니다.",
+            "내보내기",
             self.export_wordbook_clicked,
         )
         self.export_wrong_button, self.export_wrong_hint = self._add_action(
-            layout, "오답 목록 내보내기", "", self.export_wrong_clicked
+            layout, "오답 목록 내보내기", "", "내보내기", self.export_wrong_clicked
         )
         layout.addStretch(1)
 
         add_shortcut(self, Qt.Key.Key_Escape, self.back_clicked.emit)
 
-    def _add_action(self, layout: QVBoxLayout, text: str, description: str, signal):
-        button = QPushButton(text)
-        button.setMinimumHeight(40)
-        button.setMaximumWidth(260)
-        button.clicked.connect(signal)
+    def _add_action(
+        self, layout: QVBoxLayout, title: str, description: str, button_text: str, signal
+    ) -> tuple[QPushButton, QLabel]:
+        """제목·설명·버튼을 한 줄 패널로 만든다."""
+        panel = make_panel()
+        row = QHBoxLayout(panel)
+        row.setContentsMargins(22, 18, 22, 18)
+        row.setSpacing(18)
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(4)
         hint = hint_label(description)
-        layout.addWidget(button)
-        layout.addWidget(hint)
-        layout.addSpacing(10)
+        text_layout.addWidget(text_label(title, 12, bold=True))
+        text_layout.addWidget(hint)
+        button = make_button(button_text)
+        button.setMinimumWidth(120)
+        button.setAccessibleName(title)
+        button.clicked.connect(signal)
+        row.addLayout(text_layout, 1)
+        row.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(panel)
         return button, hint
 
     def refresh(self, session: AppSession) -> None:

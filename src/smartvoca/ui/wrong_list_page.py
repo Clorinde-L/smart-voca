@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ..core.models import GRADUATE_STREAK
 from ..session import AppSession
@@ -16,9 +16,10 @@ from .widgets import (
     add_shortcut,
     fill_table,
     hint_label,
+    make_button,
     make_table,
     primary_button,
-    set_font,
+    text_label,
 )
 
 
@@ -42,11 +43,10 @@ class WrongListPage(QWidget):
         # 순서는 세션이 준 그대로다(오답 횟수 순). 사용자가 정렬을 바꾸지 못하게 둔다 (FR-22)
         self.table = make_table(["단어", "뜻", "틀린 횟수", "연속 정답"], stretch_columns=[1])
         layout.addWidget(self.table, 1)
-        self.empty_label = hint_label(
-            "틀린 단어가 없습니다. 일차 시험에서 틀린 단어가 여기에 모입니다."
+        self.empty_label = text_label(
+            "틀린 단어가 없습니다.\n일차 시험에서 틀린 단어가 여기에 모입니다.", 12, role="muted"
         )
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        set_font(self.empty_label, 12)
         layout.addWidget(self.empty_label, 1)
 
         # 목록에서 빠지는 기준을 화면에 적어 둔다 (현황·환경 분석서 I-03)
@@ -57,12 +57,13 @@ class WrongListPage(QWidget):
 
         button_row = QHBoxLayout()
         self.study_button = primary_button("카드로 학습")
-        self.export_button = QPushButton("오답 목록 내보내기")
+        self.study_button.setMinimumWidth(170)
+        self.export_button = make_button("오답 목록 내보내기")
         self.study_button.clicked.connect(self.study_clicked)
         self.export_button.clicked.connect(self.export_clicked)
-        button_row.addWidget(self.study_button)
-        button_row.addStretch(1)
         button_row.addWidget(self.export_button)
+        button_row.addStretch(1)
+        button_row.addWidget(self.study_button)
         layout.addLayout(button_row)
 
         add_shortcut(self, Qt.Key.Key_Escape, self.back_clicked.emit)
@@ -77,7 +78,7 @@ class WrongListPage(QWidget):
         entries = session.wrong_list()
         meaning_of = {word.word: word.meaning for word in session.wrong_words()}
         has_entries = bool(entries)
-        self.header.set_info(f"오답 단어 {len(entries)}개")
+        self.header.set_info(f"{len(entries)}개")
         self.table.setVisible(has_entries)
         self.rule_label.setVisible(has_entries)
         self.empty_label.setVisible(not has_entries)
@@ -94,7 +95,7 @@ class WrongListPage(QWidget):
                 ]
                 for entry in entries
             ],
-            centered_columns=(2, 3),
+            bold_columns=(0,),
         )
 
     def resizeEvent(self, event) -> None:

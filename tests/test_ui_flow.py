@@ -76,7 +76,7 @@ def test_메인_화면이_처음_상태를_보여_준다(window):
     assert home.start_button.text() == "1일차 학습 시작"
     assert home.progress_label.text() == "0 / 100 일차 완료"
     assert not home.past_days_button.isEnabled()
-    assert home.wrong_button.text() == "오답 학습 (0)"
+    assert home.wrong_button.title() == "오답 학습 (0)"
     assert "기본 토익 2,000 단어" in home.wordbook_label.text()
 
 
@@ -85,7 +85,7 @@ def test_하루_학습_흐름(window):
     window.home_page.start_button.click()
     card = window.card_page
     assert window.stack.currentWidget() is card
-    assert card.header._info.text() == "1 / 20"
+    assert card.header.info() == "1 / 20"
     assert card.word_label.text() == "accommodate"
     assert card.meaning_label.text() == window.session.words[0].meaning
     assert not card.prev_button.isEnabled()
@@ -112,7 +112,7 @@ def test_하루_학습_흐름(window):
 
     result = window.result_page
     assert window.stack.currentWidget() is result
-    assert result.score_label.text() == "17 / 20"
+    assert result.score_ring.text() == "17 / 20"
     assert result.status_label.text() == "1일차 완료 · 2일차가 열렸습니다"
     assert result.table.rowCount() == 3
     assert {result.table.item(row, 0).text() for row in range(3)} == wrong_words
@@ -122,7 +122,7 @@ def test_하루_학습_흐름(window):
     home = window.home_page
     assert home.today_label.text() == "2일차"
     assert home.progress_label.text() == "1 / 100 일차 완료"
-    assert home.wrong_button.text() == "오답 학습 (3)"
+    assert home.wrong_button.title() == "오답 학습 (3)"
     assert home.past_days_button.isEnabled()
 
 
@@ -149,11 +149,11 @@ def test_시험을_그만두면_기록이_바뀌지_않는다(window, monkeypatc
     answer_all(window, wrong_positions={0})
 
     monkeypatch.setattr(dialogs, "confirm_abort_exam", lambda parent: False)
-    window.exam_page.header._back_button.click()
+    window.exam_page.header.click_back()
     assert window.stack.currentWidget() is window.exam_page  # '계속 풀기'
 
     monkeypatch.setattr(dialogs, "confirm_abort_exam", lambda parent: True)
-    window.exam_page.header._back_button.click()
+    window.exam_page.header.click_back()
     assert window.stack.currentWidget() is window.card_page
     assert window.session.day_status(1) is DayStatus.MEMORIZED
     assert window.session.wrong_list() == []
@@ -174,12 +174,12 @@ def test_지난_일차에서_복습과_재시험을_한다(window):
     days.review_button.click()
     card = window.card_page
     assert card.mode is CardMode.REVIEW
-    assert card.header._title.text() == "1일차 복습"
+    assert card.header.title() == "1일차 복습"
     assert not card.action_button.isVisible()  # 복습에는 시험 버튼이 없다
     before = window.session.summary()
     view_all_cards(window)
     assert window.session.summary() == before  # 복습은 기록을 바꾸지 않는다
-    card.header._back_button.click()
+    card.header.click_back()
     assert window.stack.currentWidget() is days
 
     days.table.selectRow(0)
@@ -215,7 +215,7 @@ def test_오답_정리_흐름(window):
         answer_all(window)
         window.exam_page.submit_button.click()
         result = window.result_page
-        assert result.score_label.text() == "2 / 2"
+        assert result.score_ring.text() == "2 / 2"
         if round_no < 3:
             assert result.status_label.text() == "오답 목록에서 빠진 단어 0개 · 남은 오답 2개"
             result.home_button.click()
@@ -261,7 +261,7 @@ def test_단어장을_불러오면_확인을_거쳐_교체된다(window, tmp_pat
     assert window.stack.currentWidget() is home
     assert home.today_label.text() == "1일차"
     assert home.progress_label.text() == "0 / 3 일차 완료"
-    assert home.wrong_button.text() == "오답 학습 (0)"
+    assert home.wrong_button.title() == "오답 학습 (0)"
     assert "사용자 단어장 45 단어" in home.wordbook_label.text()
 
 
@@ -293,6 +293,54 @@ def test_가장_긴_뜻이_최소_창_크기에서_잘리지_않는다(window, q
     window.exam_page.start("긴 뜻", Exam((Question(longest.word, choices, 0),)))
     window._go(window.exam_page)
     qapp.processEvents()
-    text_label = window.exam_page.choice_items[0]._text
+    text_label = window.exam_page.choice_items[0].text_label_widget()
     assert text_label.heightForWidth(text_label.width()) <= text_label.height()
     assert window.exam_page.choice_items[0].height() > window.exam_page.choice_items[1].height() - 1
+
+
+def test_메인_화면의_현황_칸이_기록을_따라간다(window):
+    home = window.home_page
+    assert (home.done_tile.value(), home.learned_tile.value(), home.wrong_tile.value()) == (
+        "0일",
+        "0개",
+        "0개",
+    )
+    finish_day(window, wrong_positions={0, 1})
+    window.result_page.home_button.click()
+    assert (home.done_tile.value(), home.learned_tile.value(), home.wrong_tile.value()) == (
+        "1일",
+        "20개",
+        "2개",
+    )
+
+
+def test_뜻을_가리고_외울_수_있다(window):
+    window.home_page.start_button.click()
+    card = window.card_page
+    assert card.meaning_label.isVisible() and not card.reveal_button.isVisible()  # 기본은 함께 보기
+
+    card.hide_check.setChecked(True)
+    assert not card.meaning_label.isVisible() and card.reveal_button.isVisible()
+    card.reveal_button.click()
+    assert card.meaning_label.isVisible()
+    card.next_button.click()
+    assert not card.meaning_label.isVisible()  # 다음 카드는 다시 가려진다
+    card.reveal_meaning()                      # Space 단축키가 부르는 동작
+    assert card.meaning_label.text() == window.session.words[1].meaning
+    assert card.meaning_label.isVisible()
+
+    view_all_cards(window)
+    assert card.action_button.isEnabled()      # 가리고 봐도 암기 완료는 같다
+    card.hide_check.setChecked(False)
+
+
+def test_문제_번호_점을_눌러_그_문제로_간다(window):
+    window.home_page.start_button.click()
+    view_all_cards(window)
+    window.card_page.action_button.click()
+    exam = window.exam_page
+    assert exam.dots.isVisible() and not exam.answered_bar.isVisible()
+    exam.dots.jump_requested.emit(11)
+    assert exam.position == 11
+    assert exam.header.info() == "문제 12 / 20"
+    assert exam.word_label.text() == window._exam.questions[11].word

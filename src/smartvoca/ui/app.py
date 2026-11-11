@@ -7,14 +7,12 @@ from __future__ import annotations
 import sys
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .. import paths
 from ..session import AppSession, WordbookLoadError
-from . import dialogs
+from . import dialogs, theme
 from .main_window import MainWindow
-from .widgets import APP_STYLE
 
 
 def create_application(argv: list[str]) -> QApplication:
@@ -25,8 +23,9 @@ def create_application(argv: list[str]) -> QApplication:
     style_hints = app.styleHints()
     if hasattr(style_hints, "setColorScheme"):
         style_hints.setColorScheme(Qt.ColorScheme.Light)
-    app.setFont(QFont("Malgun Gothic", 11))
-    app.setStyleSheet(APP_STYLE)
+    app.setFont(theme.base_font())
+    app.setStyleSheet(theme.APP_STYLE)
+    app.setWindowIcon(theme.app_icon())
     return app
 
 

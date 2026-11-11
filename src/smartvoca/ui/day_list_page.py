@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ..session import AppSession
 from .widgets import (
@@ -14,9 +14,11 @@ from .widgets import (
     PageHeader,
     add_shortcut,
     fill_table,
+    hint_label,
+    make_button,
     make_table,
     primary_button,
-    set_font,
+    text_label,
 )
 
 
@@ -40,21 +42,21 @@ class DayListPage(QWidget):
         self.header.back_clicked.connect(self.back_clicked)
         layout.addWidget(self.header)
 
+        layout.addWidget(hint_label("일차를 고른 뒤 카드로 복습하거나 시험을 다시 볼 수 있습니다"))
         self.table = make_table(["일차", "단어", "상태"], stretch_columns=[1])
         self.table.itemSelectionChanged.connect(self._update_buttons)
         self.table.cellDoubleClicked.connect(lambda *_: self._request_review())
         layout.addWidget(self.table, 1)
 
         bottom_row = QHBoxLayout()
-        self.selected_label = QLabel("일차를 고르세요")
-        set_font(self.selected_label, 11, bold=True)
+        self.selected_label = text_label("일차를 고르세요", 12, bold=True)
+        self.exam_button = make_button("시험 보기")
         self.review_button = primary_button("카드로 복습")
-        self.exam_button = QPushButton("시험 보기")
         self.review_button.clicked.connect(self._request_review)
         self.exam_button.clicked.connect(self._request_exam)
         bottom_row.addWidget(self.selected_label, 1)
-        bottom_row.addWidget(self.review_button)
         bottom_row.addWidget(self.exam_button)
+        bottom_row.addWidget(self.review_button)
         layout.addLayout(bottom_row)
 
         add_shortcut(self, Qt.Key.Key_Escape, self.back_clicked.emit)
@@ -73,7 +75,7 @@ class DayListPage(QWidget):
                     session.day_status(day_no).value,  # '완료' / '암기 완료' 를 글자로 적는다
                 ]
             )
-        fill_table(self.table, rows, centered_columns=(0, 2))
+        fill_table(self.table, rows, bold_columns=(0,))
         self.table.clearSelection()
         self._update_buttons()
 

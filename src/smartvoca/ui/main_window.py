@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session = session
         self.setWindowTitle("스마트 보카")
-        self.resize(900, 650)
+        self.resize(960, 700)
         self.setMinimumSize(800, 600)
 
         self._card_day: int | None = None   # 카드 화면이 다루는 일차 (오답 학습이면 None)

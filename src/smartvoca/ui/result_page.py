@@ -7,20 +7,35 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ..core.models import ExamResult
 from .widgets import (
     PAGE_MARGIN,
     SPACING,
     PageHeader,
+    ScoreRing,
     add_shortcut,
     fill_table,
     hint_label,
+    make_button,
+    make_panel,
     make_table,
     primary_button,
-    set_font,
+    set_role,
+    text_label,
 )
+
+
+def _cheer(correct: int, total: int) -> str:
+    ratio = correct / total if total else 0
+    if ratio == 1:
+        return "모두 맞혔습니다. 완벽해요!"
+    if ratio >= 0.9:
+        return "거의 다 맞혔습니다. 아주 좋아요."
+    if ratio >= 0.6:
+        return "잘하고 있어요. 틀린 단어만 한 번 더 보면 됩니다."
+    return "괜찮아요. 틀린 단어는 오답 학습에서 다시 볼 수 있습니다."
 
 
 class ResultPage(QWidget):
@@ -46,40 +61,45 @@ class ResultPage(QWidget):
         self.header = PageHeader(show_back=False)
         layout.addWidget(self.header)
 
-        self.score_label = QLabel("")
-        self.score_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        set_font(self.score_label, 32, bold=True)
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        summary = make_panel(shadow=True)
+        summary_layout = QHBoxLayout(summary)
+        summary_layout.setContentsMargins(28, 20, 28, 20)
+        summary_layout.setSpacing(28)
+        self.score_ring = ScoreRing()
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(6)
+        self.status_label = text_label("", 15, bold=True)
         self.status_label.setWordWrap(True)
-        set_font(self.status_label, 13)
-        layout.addWidget(self.score_label)
-        layout.addWidget(self.status_label)
-
-        self.graduated_label = QLabel("")
+        self.cheer_label = hint_label("")
+        self.graduated_label = text_label("", 11, role="success")
         self.graduated_label.setWordWrap(True)
-        layout.addWidget(self.graduated_label)
+        text_layout.addStretch(1)
+        text_layout.addWidget(self.status_label)
+        text_layout.addWidget(self.cheer_label)
+        text_layout.addWidget(self.graduated_label)
+        text_layout.addStretch(1)
+        summary_layout.addWidget(self.score_ring)
+        summary_layout.addLayout(text_layout, 1)
+        layout.addWidget(summary)
 
-        self.table_title = QLabel("")
-        set_font(self.table_title, 11, bold=True)
+        self.table_title = text_label("", 11, bold=True)
         layout.addWidget(self.table_title)
         # 정답과 고른 답을 색이 아니라 열 제목으로 구분한다
         self.table = make_table(["단어", "정답", "내가 고른 답"], stretch_columns=[1, 2])
         layout.addWidget(self.table, 1)
-        self.perfect_label = hint_label("모두 맞혔습니다")
+        self.perfect_label = text_label("틀린 단어가 없습니다", 13, role="muted")
         self.perfect_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        set_font(self.perfect_label, 13)
         layout.addWidget(self.perfect_label, 1)
 
         button_row = QHBoxLayout()
-        self.primary_button = primary_button("")
-        self.primary_button.clicked.connect(self._press_primary)
-        self.home_button = QPushButton("메인으로")
+        self.home_button = make_button("메인으로")
         self.home_button.clicked.connect(self.home_clicked)
+        self.primary_button = primary_button("")
+        self.primary_button.setMinimumWidth(170)
+        self.primary_button.clicked.connect(self._press_primary)
         button_row.addStretch(1)
-        button_row.addWidget(self.primary_button)
         button_row.addWidget(self.home_button)
-        button_row.addStretch(1)
+        button_row.addWidget(self.primary_button)
         layout.addLayout(button_row)
 
         add_shortcut(self, Qt.Key.Key_Return, self._press_enter)
@@ -117,25 +137,28 @@ class ResultPage(QWidget):
             f"오답 목록에서 빠진 단어 {len(graduated)}개 · 남은 오답 {remaining}개"
         )
         self.graduated_label.setVisible(bool(graduated))
-        self.graduated_label.setText("오답 목록에서 빠진 단어: " + ", ".join(graduated))
+        self.graduated_label.setText("✓ 목록에서 빠진 단어: " + ", ".join(graduated))
         self.primary_button.setVisible(True)
         self.primary_button.setText("오답 목록으로")
         self._show_result(result, "연속 정답이 0 으로 돌아갑니다")
 
     def _show_result(self, result: ExamResult, wrong_note: str) -> None:
-        self.score_label.setText(f"{result.correct_count} / {result.total}")
+        self.score_ring.set_score(result.correct_count, result.total)
+        self.cheer_label.setText(_cheer(result.correct_count, result.total))
+        set_role(self.graduated_label, "success")
         has_wrong = bool(result.wrong_items)
         self.table_title.setVisible(has_wrong)
         self.table.setVisible(has_wrong)
         self.perfect_label.setVisible(not has_wrong)
         if has_wrong:
-            self.table_title.setText(f"틀린 단어 ({len(result.wrong_items)}) — {wrong_note}")
+            self.table_title.setText(f"틀린 단어 {len(result.wrong_items)}개 — {wrong_note}")
             fill_table(
                 self.table,
                 [
                     [item.word, item.correct_meaning, item.chosen_meaning]
                     for item in result.wrong_items
                 ],
+                bold_columns=(0,),
             )
 
     def _press_primary(self) -> None:
