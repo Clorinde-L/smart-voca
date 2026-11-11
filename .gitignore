@@ -15,6 +15,9 @@ venv/
 .pytest_cache/
 .ipynb_checkpoints/
 
+# 사용자 데이터: 학습 기록, 불러온 단어장 사본 (데이터 설계서 DD-02)
+userdata/
+
 # 로그·백업·임시
 logs/
 backups/
