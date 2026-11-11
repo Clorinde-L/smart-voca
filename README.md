@@ -69,8 +69,8 @@ src/smartvoca/
 ├── session.py 화면이 쓰는 창구 (로직 호출 순서와 저장 시점 관리)
 └── ui/        PyQt6 화면
 tests/         pytest
-docs/          승인된 분석·설계 문서
-ai-agent/claude/  기획서, 작업 계획, 일지
+docs/          승인된 기획·분석·설계 문서
+ai-agent/claude/  작업 계획, 일지
 ```
 
 분석·설계 문서는 `docs/` 의 `분석_261111_*`, `설계_261111_*` 를 참고하세요.
