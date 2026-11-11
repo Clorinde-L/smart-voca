@@ -17,9 +17,12 @@ pip install -e ".[dev]"
 
 ## 실행
 
+프로젝트 폴더의 **`스마트보카 실행.bat`** 을 더블클릭합니다.
+
+터미널에서 실행하려면 다음과 같이 합니다. 시작할 때 오류가 나면 이 방법으로 실행해야 오류 내용이 보입니다.
+
 ```powershell
-.venv\Scripts\Activate.ps1
-python -m smartvoca
+.venv\Scripts\python -m smartvoca
 ```
 
 ## 사용 방법
