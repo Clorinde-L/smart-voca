@@ -113,13 +113,26 @@ QProgressBar::chunk {{ background: {PRIMARY}; border-radius: 4px; }}
 QProgressBar[tone="onPrimary"] {{ background: rgba(255, 255, 255, 70); }}
 QProgressBar[tone="onPrimary"]::chunk {{ background: #ffffff; }}
 
-QTableWidget {{
+QLabel#keycap {{
+    background: {SURFACE}; color: {TEXT_MUTED}; border: 1px solid {BORDER_STRONG};
+    border-bottom-width: 2px; border-radius: 5px; padding: 1px 7px; min-width: 12px;
+}}
+QLabel#statusDone {{ color: {SUCCESS}; font-weight: 700; }}
+QLabel#statusMemorized {{ color: {WARNING}; font-weight: 700; }}
+
+QLineEdit#search {{
+    background: {SURFACE}; border: 1px solid {BORDER_STRONG}; border-radius: 10px;
+    padding: 9px 14px; selection-background-color: {PRIMARY_SOFT}; selection-color: {TEXT};
+}}
+QLineEdit#search:focus {{ border: 2px solid {PRIMARY}; padding: 8px 13px; }}
+
+QTableWidget, QTableView {{
     background: {SURFACE}; border: 1px solid {BORDER}; border-radius: {RADIUS}px;
     gridline-color: transparent; outline: none;
     selection-background-color: {PRIMARY_SOFT}; selection-color: {TEXT};
     alternate-background-color: #f8f9fc;
 }}
-QTableWidget::item {{ padding: 8px 10px; border-bottom: 1px solid #eef0f5; }}
+QTableWidget::item, QTableView::item {{ padding: 8px 10px; border-bottom: 1px solid #eef0f5; }}
 QHeaderView::section {{
     background: #f8f9fc; color: {TEXT_MUTED}; font-weight: 600;
     padding: 9px 10px; border: none; border-bottom: 1px solid {BORDER};

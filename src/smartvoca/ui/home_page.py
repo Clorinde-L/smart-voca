@@ -12,6 +12,7 @@ from ..session import AppSession
 from .widgets import (
     PAGE_MARGIN,
     SPACING,
+    KeyHints,
     MenuCard,
     StatTile,
     add_shortcut,
@@ -62,7 +63,7 @@ class HomePage(QWidget):
         menu_row.setSpacing(SPACING)
         self.past_days_button = MenuCard("복", "지난 일차", "복습·재시험")
         self.wrong_button = MenuCard("오", "오답 학습", "틀린 단어 다시 보기")
-        self.wordbook_button = MenuCard("단", "단어 목록", "불러오기·내보내기")
+        self.wordbook_button = MenuCard("단", "단어 목록", "전체 단어 검색·불러오기")
         self.past_days_button.clicked.connect(self.past_days_clicked)
         self.wrong_button.clicked.connect(self.wrong_clicked)
         self.wordbook_button.clicked.connect(self.wordbook_clicked)
@@ -71,8 +72,7 @@ class HomePage(QWidget):
         layout.addLayout(menu_row)
         layout.addStretch(1)
 
-        self.key_hint = hint_label("Enter 를 누르면 오늘의 학습을 바로 시작합니다")
-        self.key_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.key_hint = KeyHints([("Enter", "오늘의 학습 바로 시작")])
         layout.addWidget(self.key_hint)
 
         add_shortcut(self, Qt.Key.Key_Return, self._press_start)

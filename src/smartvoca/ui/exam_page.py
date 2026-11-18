@@ -4,7 +4,7 @@
 # 파일 위치: src/smartvoca/ui/exam_page.py
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
 
 from ..core.models import CHOICE_COUNT, Exam
@@ -12,6 +12,7 @@ from .widgets import (
     PAGE_MARGIN,
     SPACING,
     ChoiceItem,
+    KeyHints,
     PageHeader,
     QuestionDots,
     add_shortcut,
@@ -22,6 +23,8 @@ from .widgets import (
 )
 
 MAX_DOTS = 60  # 문제가 이보다 많으면(오답이 많이 쌓인 오답 시험) 점 대신 막대로 보여 준다
+# 답을 고른 뒤 다음 문제로 넘어가기까지의 시간. 고른 보기가 표시되는 것을 눈으로 확인할 틈을 준다 (UD-05)
+AUTO_ADVANCE_MS = 300
 
 
 class ExamPage(QWidget):
@@ -40,6 +43,10 @@ class ExamPage(QWidget):
         self._exam: Exam | None = None
         self._answers: list[int | None] = []
         self._position = 0
+        self._advance_timer = QTimer(self)
+        self._advance_timer.setSingleShot(True)
+        self._advance_timer.setInterval(AUTO_ADVANCE_MS)
+        self._advance_timer.timeout.connect(self._advance_after_answer)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN)
@@ -60,6 +67,7 @@ class ExamPage(QWidget):
         self.answered_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.answered_label)
 
+        layout.addStretch(1)  # 문제와 보기를 화면 가운데쯤에 둔다 (아래 stretch 와 짝)
         self.word_label = text_label("", 32, bold=True)
         self.word_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.word_label.setWordWrap(True)
@@ -95,6 +103,10 @@ class ExamPage(QWidget):
         bottom_row.addWidget(self.unanswered_label, 1)
         bottom_row.addWidget(self.submit_button)
         layout.addLayout(bottom_row)
+        self.key_hints = KeyHints(
+            [("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("Enter", "다음·제출"), ("Esc", "그만두기")]
+        )
+        layout.addWidget(self.key_hints)
 
         add_shortcut(self, Qt.Key.Key_Right, self.go_next)
         add_shortcut(self, Qt.Key.Key_Left, self.go_prev)
@@ -106,6 +118,7 @@ class ExamPage(QWidget):
         self._exam = exam
         self._answers = [None] * len(exam.questions)
         self._position = 0
+        self._advance_timer.stop()
         self.header.set_title(title)
         use_dots = len(self._answers) <= MAX_DOTS
         self.dots.setVisible(use_dots)
@@ -123,13 +136,37 @@ class ExamPage(QWidget):
         return self._position
 
     def choose(self, choice_index: int) -> None:
-        """보기를 고른다. 다른 보기를 다시 고르면 바뀐다. 자동으로 다음 문제로 넘어가지 않는다."""
+        """보기를 고른다. 다른 보기를 다시 고르면 바뀐다.
+
+        잠시 뒤(AUTO_ADVANCE_MS) 다음 문제로 넘어간다. 그 사이에 다른 보기를 고르면 다시 기다린다.
+        넘어간 뒤에도 이전 문제로 돌아가 답을 고칠 수 있다 (FR-15).
+        """
         if self._exam is None:
             return
         self._answers[self._position] = choice_index
         self._render()
+        self._advance_timer.start()
+
+    @property
+    def auto_advance_pending(self) -> bool:
+        return self._advance_timer.isActive()
+
+    def _advance_after_answer(self) -> None:
+        """다음 문제로 간다. 마지막 문제면 아직 안 푼 첫 문제로, 모두 풀었으면 제출 버튼에 초점을 둔다."""
+        if self._exam is None:
+            return
+        total = len(self._answers)
+        if self._position < total - 1:
+            self.go_to(self._position + 1)
+            return
+        unanswered = [i for i, answer in enumerate(self._answers) if answer is None]
+        if unanswered:
+            self.go_to(unanswered[0])
+        else:
+            self.submit_button.setFocus()
 
     def go_to(self, position: int) -> None:
+        self._advance_timer.stop()  # 직접 옮겨 가면 기다리던 자동 넘김은 취소한다
         if self._exam is not None and 0 <= position < len(self._answers):
             self._position = position
             self._render()
@@ -148,6 +185,7 @@ class ExamPage(QWidget):
             self.go_next()
 
     def _submit(self) -> None:
+        self._advance_timer.stop()
         if self._exam is not None and None not in self._answers:
             self.submitted.emit(list(self._answers))
 

@@ -14,6 +14,7 @@ import random
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # 창을 실제 화면에 띄우지 않는다
 
 import pytest
+from PyQt6.QtTest import QTest
 from conftest import DEFAULT_CSV, DEFAULT_DAY_COUNT, DEFAULT_WORD_COUNT, write_csv
 
 from smartvoca.core.models import DayStatus, Exam, Question
@@ -21,6 +22,7 @@ from smartvoca.session import AppSession
 from smartvoca.ui import dialogs
 from smartvoca.ui.app import create_application
 from smartvoca.ui.card_page import CardMode
+from smartvoca.ui.exam_page import AUTO_ADVANCE_MS
 from smartvoca.ui.main_window import MainWindow
 
 
@@ -344,3 +346,106 @@ def test_문제_번호_점을_눌러_그_문제로_간다(window):
     assert exam.position == 11
     assert exam.header.info() == "문제 12 / 20"
     assert exam.word_label.text() == window._exam.questions[11].word
+
+
+# ── 시험 자동 넘김 (UI/UX 설계서 UD-05) ─────────────────────────
+def start_first_exam(window: MainWindow):
+    window.home_page.start_button.click()
+    view_all_cards(window)
+    window.card_page.action_button.click()
+    return window.exam_page
+
+
+def test_답을_고르면_잠시_뒤_다음_문제로_넘어간다(window):
+    exam = start_first_exam(window)
+    exam.choice_items[1].clicked.emit(1)
+    assert exam.position == 0 and exam.auto_advance_pending  # 고른 답을 볼 틈을 준다
+    QTest.qWait(AUTO_ADVANCE_MS + 150)
+    assert exam.position == 1 and not exam.auto_advance_pending
+    exam.prev_button.click()
+    assert exam.choice_items[1].is_selected()  # 돌아가 답을 고칠 수 있다 (FR-15)
+
+
+def test_직접_옮겨_가면_자동_넘김은_취소된다(window):
+    exam = start_first_exam(window)
+    exam.choice_items[0].clicked.emit(0)
+    exam.dots.jump_requested.emit(5)
+    QTest.qWait(AUTO_ADVANCE_MS + 150)
+    assert exam.position == 5
+
+
+def test_마지막_문제에_답하면_안_푼_문제로_간다(window):
+    exam = start_first_exam(window)
+    exam.dots.jump_requested.emit(19)
+    exam.choice_items[0].clicked.emit(0)
+    QTest.qWait(AUTO_ADVANCE_MS + 150)
+    assert exam.position == 0  # 1번부터 아직 안 풀었다
+
+
+def test_모두_풀면_제출_버튼에_초점이_간다(window, monkeypatch):
+    exam = start_first_exam(window)
+    focused = []
+    # offscreen 에서는 활성 창이 없어 hasFocus() 로 확인할 수 없으므로 setFocus 호출을 기록한다
+    monkeypatch.setattr(exam.submit_button, "setFocus", lambda *args: focused.append(True))
+    answer_all(window)
+    QTest.qWait(AUTO_ADVANCE_MS + 150)
+    assert exam.position == 19 and exam.submit_button.isEnabled()
+    assert focused
+
+
+def test_시험과_카드에_단축키_안내가_있다(window):
+    exam = start_first_exam(window)
+    assert "보기 선택" in exam.key_hints.texts()
+    window.open_review_cards(1)  # 카드를 모두 봐서 1일차는 암기 완료 → 복습할 수 있다
+    card = window.card_page
+    assert card.mode is CardMode.REVIEW
+    assert card.key_hints_no_action.isVisible() and not card.key_hints.isVisible()  # 복습엔 시험 안내가 없다
+
+
+# ── 단어 목록 검색 (UI/UX 설계서 UD-06) ──────────────────────────
+def test_단어_목록에_전체_단어가_일차와_함께_나온다(window):
+    window.home_page.wordbook_button.click()
+    page = window.wordbook_page
+    assert page.proxy.rowCount() == DEFAULT_WORD_COUNT
+    assert page.result_label.text() == f"{DEFAULT_WORD_COUNT:,}개"
+    assert page.proxy.index(0, 0).data() == "1일차"
+    assert page.proxy.index(DEFAULT_WORD_COUNT - 1, 0).data() == f"{DEFAULT_DAY_COUNT}일차"
+
+
+def test_영단어나_뜻으로_검색한다(window):
+    window.home_page.wordbook_button.click()
+    page = window.wordbook_page
+    page.search_edit.setText("EXECUTIVE")            # 대소문자 무시
+    assert page.visible_words() == ["executive"]
+    page.search_edit.setText("재고")                 # 뜻으로 찾기
+    assert "inventory" in page.visible_words()
+    assert all("재고" in page.proxy.index(r, 2).data() for r in range(page.proxy.rowCount()))
+    assert page.result_label.text().endswith(f"/ {DEFAULT_WORD_COUNT:,}개")
+
+
+def test_숫자로_검색하면_그_일차_단어가_나온다(window):
+    window.home_page.wordbook_button.click()
+    page = window.wordbook_page
+    page.search_edit.setText("12일차")
+    expected = [w.word for w in window.session.day_words(12)]
+    assert page.visible_words() == expected
+    page.search_edit.setText(str(DEFAULT_DAY_COUNT))  # 마지막 일차는 남은 단어만
+    assert len(page.visible_words()) == DEFAULT_WORD_COUNT - (DEFAULT_DAY_COUNT - 1) * 20
+
+
+def test_검색_결과가_없으면_안내한다(window):
+    window.home_page.wordbook_button.click()
+    page = window.wordbook_page
+    page.search_edit.setText("zzzz없는단어")
+    assert page.visible_words() == []
+    assert page.empty_label.isVisible() and not page.table.isVisible()
+
+
+def test_Esc는_검색어를_먼저_지우고_다음에_뒤로_간다(window):
+    window.home_page.wordbook_button.click()
+    page = window.wordbook_page
+    page.search_edit.setText("account")
+    page._press_escape()
+    assert page.search_edit.text() == "" and window.stack.currentWidget() is page
+    page._press_escape()
+    assert window.stack.currentWidget() is window.home_page

@@ -5,9 +5,12 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from ..core.models import DayStatus
 from ..session import AppSession
+from . import theme
 from .widgets import (
     PAGE_MARGIN,
     SPACING,
@@ -42,7 +45,9 @@ class DayListPage(QWidget):
         self.header.back_clicked.connect(self.back_clicked)
         layout.addWidget(self.header)
 
-        layout.addWidget(hint_label("일차를 고른 뒤 카드로 복습하거나 시험을 다시 볼 수 있습니다"))
+        layout.addWidget(
+            hint_label("일차를 고른 뒤 카드로 복습하거나 시험을 다시 볼 수 있습니다. 두 번 누르면 바로 복습합니다")
+        )
         self.table = make_table(["일차", "단어", "상태"], stretch_columns=[1])
         self.table.itemSelectionChanged.connect(self._update_buttons)
         self.table.cellDoubleClicked.connect(lambda *_: self._request_review())
@@ -75,7 +80,11 @@ class DayListPage(QWidget):
                     session.day_status(day_no).value,  # '완료' / '암기 완료' 를 글자로 적는다
                 ]
             )
-        fill_table(self.table, rows, bold_columns=(0,))
+        fill_table(self.table, rows, bold_columns=(0, 2))
+        # 상태는 글자와 색을 함께 쓴다: 완료는 초록, 암기만 마친 일차는 주황
+        for row, day_no in enumerate(self._day_numbers):
+            color = theme.SUCCESS if session.day_status(day_no) is DayStatus.DONE else theme.WARNING
+            self.table.item(row, 2).setForeground(QColor(color))
         self.table.clearSelection()
         self._update_buttons()
 

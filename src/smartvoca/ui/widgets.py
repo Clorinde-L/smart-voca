@@ -99,6 +99,37 @@ def add_shortcut(widget: QWidget, key, handler) -> QShortcut:
     return shortcut
 
 
+class KeyHints(QWidget):
+    """화면 아래에 두는 단축키 안내 줄. [키] 설명 · [키] 설명 … 꼴로 보여 준다.
+
+    단축키는 이미 있지만 화면에 적혀 있지 않으면 쓰지 않게 되므로, 키 모양 글자로 눈에 띄게 둔다.
+    """
+
+    def __init__(self, hints: list[tuple[str, str]]):
+        super().__init__()
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addStretch(1)
+        for position, (keys, description) in enumerate(hints):
+            if position:
+                separator = text_label("·", 10, role="muted")
+                layout.addSpacing(4)
+                layout.addWidget(separator)
+                layout.addSpacing(4)
+            for key in keys.split():
+                keycap = QLabel(key)
+                keycap.setObjectName("keycap")
+                keycap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                set_font(keycap, 9, bold=True)
+                layout.addWidget(keycap)
+            layout.addWidget(text_label(description, 10, role="muted"))
+        layout.addStretch(1)
+
+    def texts(self) -> list[str]:
+        return [label.text() for label in self.findChildren(QLabel)]
+
+
 class PageHeader(QWidget):
     """'← 뒤로' · 제목 · 오른쪽 정보로 된 화면 머리줄."""
 

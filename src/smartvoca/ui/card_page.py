@@ -15,6 +15,7 @@ from ..core.models import GRADUATE_STREAK, Word, WrongEntry
 from .widgets import (
     PAGE_MARGIN,
     SPACING,
+    KeyHints,
     PageHeader,
     add_shortcut,
     hint_label,
@@ -119,6 +120,15 @@ class CardPage(QWidget):
         bottom_row.addWidget(self.hint, 1)
         bottom_row.addWidget(self.action_button)
         layout.addLayout(bottom_row)
+        # 복습에는 시험이 없으므로(FR-21) Enter 안내를 뺀 줄을 따로 두고 모드에 따라 바꿔 보여 준다
+        self.key_hints = KeyHints(
+            [("← →", "카드 넘기기"), ("Space", "뜻 보기(가렸을 때)"), ("Enter", "시험 시작"), ("Esc", "뒤로")]
+        )
+        self.key_hints_no_action = KeyHints(
+            [("← →", "카드 넘기기"), ("Space", "뜻 보기(가렸을 때)"), ("Esc", "뒤로")]
+        )
+        layout.addWidget(self.key_hints)
+        layout.addWidget(self.key_hints_no_action)
 
         add_shortcut(self, Qt.Key.Key_Right, self.go_next)
         add_shortcut(self, Qt.Key.Key_Left, self.go_prev)
@@ -152,6 +162,8 @@ class CardPage(QWidget):
         self.position_bar.setMaximum(self._deck.total)
         has_action = mode in _ACTION_TEXT
         self.action_button.setVisible(has_action)  # 복습에는 시험 버튼이 없다 (FR-21)
+        self.key_hints.setVisible(has_action)
+        self.key_hints_no_action.setVisible(not has_action)
         if has_action:
             self.action_button.setText(_ACTION_TEXT[mode])
         self._render()
