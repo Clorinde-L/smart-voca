@@ -272,7 +272,7 @@ permanent,"[형] 영구적인, 정규직의"
 position,"[명] 직위, 일자리; 위치; 입장 [동] 배치하다"
 potential,"[형] 잠재적인 [명] 잠재력, 가능성"
 preference,"[명] 선호, 우선권"
-probation,[명] 수습 기간; 집행 유예
+probation,[명] 수습 기간; 보호 관찰
 proficiency,"[명] 능숙함, 숙달"
 proficient,"[형] 능숙한, 숙달된"
 promote,[동] 승진시키다; 홍보하다; 촉진하다
@@ -350,7 +350,7 @@ participate,[동] (in) 참가하다
 participation,"[명] 참가, 참여"
 payroll,[명] 급여 대상자 명단; 급여 총액
 personal,"[형] 개인의, 사적인"
-prerequisite,"[명] 전제 조건, 필수 과목"
+prerequisite,"[명] 전제 조건, 필수 요건; 선수 과목"
 prospective,"[형] 장래의, 예상되는, 잠재적인"
 punctual,[형] 시간을 엄수하는
 raise,[명] 임금 인상 [동] 올리다; (자금을) 모으다; (문제를) 제기하다
@@ -435,7 +435,7 @@ marketing,[명] 마케팅
 merchandise,"[명] 상품, 물품 [동] 판매하다"
 merchant,[명] 상인
 niche,[명] 틈새 (시장); 적소
-offer,"[동] 제공하다, 제안하다 [명] 제안; 할인"
+offer,"[동] 제공하다, 제안하다 [명] 제안; 특가 (판매)"
 outlet,"[명] 할인 매장, 아울렛; (전기) 콘센트; 판로"
 patron,"[명] 단골손님, 후원자"
 popularity,[명] 인기
@@ -612,7 +612,7 @@ loan,[명] 대출(금) [동] 빌려주다
 loss,"[명] 손실, 손해; 분실"
 margin,[명] 이윤(폭); 여백; 차이
 monetary,"[형] 통화의, 금전의"
-mortgage,"[명] (담보) 대출, 융자"
+mortgage,"[명] (주택) 담보 대출, 융자"
 net,"[형] 순(純)~, 최종적인 [동] 순이익을 얻다"
 overdue,"[형] (지불·반납) 기한이 지난, 연체된"
 owe,"[동] 빚지다, 신세 지다"
@@ -1126,7 +1126,7 @@ rental,"[명] 임대, 대여(료) [형] 임대의"
 reroute,[동] 경로를 변경하다
 scenic,[형] 경치가 좋은
 shuttle,"[명] 정기 왕복 버스, 셔틀"
-stopover,"[명] 단기 체류, 도중 하차"
+stopover,"[명] 단기 체류, 도중하차"
 timetable,[명] 시간표
 toll,[명] 통행료; 사상자 수
 vehicle,"[명] 차량, 탈것"
@@ -1580,7 +1580,7 @@ major,"[형] 주요한, 큰 [명] 전공 [동] 전공하다"
 majority,"[명] 대다수, 과반수"
 manage,"[동] 관리하다, 경영하다; 간신히 해내다"
 management,"[명] 경영(진), 관리"
-manager,"[명] 관리자, 부장"
+manager,"[명] 관리자, 책임자, 매니저"
 maximize,[동] 극대화하다
 maximum,[형] 최대의 [명] 최대
 minimize,[동] 최소화하다
@@ -1707,7 +1707,7 @@ adopt,[동] 채택하다; 입양하다
 alert,"[동] 경고하다, 알리다 [형] 경계하는 [명] 경보"
 allot,[동] 할당하다
 ambiguous,"[형] 애매한, 모호한"
-amenable,"[형] 순종하는, 잘 받아들이는"
+amenable,"[형] (to) 잘 받아들이는, 기꺼이 따르는"
 analytical,[형] 분석적인
 applaud,[동] 박수를 치다; 칭찬하다
 applause,[명] 박수(갈채)
@@ -1793,7 +1793,7 @@ drastic,"[형] 과감한, 급격한"
 drastically,"[부] 과감하게, 급격히"
 earn,[동] 벌다; 얻다
 ease,"[명] 쉬움, 편안함 [동] 완화하다"
-eagerly,"[부] 열심히, 간절히"
+eagerly,"[부] 간절히, 열렬히"
 efficiently,[부] 효율적으로
 elevate,"[동] 높이다, 승진시키다"
 eloquent,"[형] 웅변의, 유창한"
