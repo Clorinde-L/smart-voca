@@ -45,7 +45,7 @@ smart-voca/
 │   ├── session.py                # 화면이 쓰는 유일한 창구 (AppSession)
 │   └── ui/                       # PyQt6 화면
 ├── tests/                        # pytest
-├── data/toeic_words_2000.csv     # 기본 단어장 (프로그램은 읽기만 함)
+├── data/toeic_words.csv          # 기본 단어장 (프로그램은 읽기만 함)
 ├── userdata/                     # 학습 기록, 단어장 사본 (커밋 제외, 실행하면 생성)
 └── .venv/                        # 가상환경 (커밋 제외)
 ```
@@ -271,8 +271,9 @@ smart-voca/
 - **승인된 문서 수정**: `docs/` 의 문서는 사용자 승인 없이 고치지 않는다. 고칠 때는 문서 관리 규칙 5 의 `docs/` 문서 수정 절차(같은 파일 직접 수정)를 따른다.
 - **계층 규칙**: `core` 는 표준 라이브러리만 쓰고 파일을 다루지 않는다. 화면은 `AppSession` 만 부른다.
   색·글꼴은 `ui/theme.py`, 대화상자는 `ui/dialogs.py` 에만 둔다.
-- **기본 단어장**: `data/toeic_words_2000.csv` 는 직접 고치지 않는다. 원본 `ai-agent/claude/261021_토익단어2000/data/*.tsv` 를
-  고친 뒤 `script/build_csv.py` 로 다시 만든다. 뜻은 1차 검수 완료(`ai-agent/claude/검토_261118_단어장 뜻 검수.md`), 이후 발견분은 원본 TSV 에 반영한다.
+- **기본 단어장**: `data/toeic_words.csv`(2,109개, 106일차)는 직접 고치지 않는다. 원본 `ai-agent/claude/261118_PDF단어장/data/toeic_words.tsv` 를
+  고친 뒤 같은 폴더의 `script/build_csv.py` 로 다시 만든다. 원본은 토익 단어목록 PDF(`ai-agent/uploads/`)에서 뽑았고(ADR-15) 뜻은 검수 전이다.
+  옛 단어장 원본 `261021_토익단어2000/` 은 기록으로만 남긴다. 단어 수가 바뀌면 `tests/conftest.py` 의 `DEFAULT_WORD_COUNT`·`DEFAULT_DAY_COUNT` 를 고친다.
 - **화면 확인**: 창을 띄우지 않고 스크린샷을 찍을 때는 `QT_QPA_PLATFORM=offscreen` 과 `QT_QPA_FONTDIR=C:/Windows/Fonts` 를
   함께 준다. 글꼴 폴더를 주지 않으면 한글이 네모로 나온다.
 - **콘솔 한글**: Git Bash 에서 Python 이 한글 경로를 출력하면 깨져 보일 수 있다. 파일 내용은 정상이다.
