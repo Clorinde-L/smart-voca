@@ -11,7 +11,10 @@ import pytest
 from smartvoca.core.models import Exam, ExamResult, Word, WrongItem
 from smartvoca.storage.wordbook_csv import read_wordbook_csv
 
-DEFAULT_CSV = Path(__file__).resolve().parents[1] / "data" / "toeic_words_2000.csv"
+DEFAULT_CSV = Path(__file__).resolve().parents[1] / "data" / "toeic_words.csv"
+# 기본 단어장 규모. 단어장을 바꾸면 여기만 고친다 (20개씩 나누면 106일차, 마지막 일차는 9개)
+DEFAULT_WORD_COUNT = 2109
+DEFAULT_DAY_COUNT = 106
 
 
 def make_words(count: int) -> list[Word]:

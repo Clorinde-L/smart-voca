@@ -21,7 +21,7 @@ def base_dir() -> Path:
 
 
 def default_wordbook_path() -> Path:
-    return base_dir() / "data" / "toeic_words_2000.csv"
+    return base_dir() / "data" / "toeic_words.csv"
 
 
 def userdata_dir() -> Path:

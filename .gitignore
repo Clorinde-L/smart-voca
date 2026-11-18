@@ -33,3 +33,6 @@ desktop.ini
 
 # Claude Code 로컬 설정
 .claude/settings.local.json
+
+# 외부 참고자료 원본 PDF (용량이 커서 커밋하지 않음, 경로만 문서에 남김)
+ai-agent/uploads/*.pdf

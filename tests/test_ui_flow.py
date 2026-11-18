@@ -14,7 +14,7 @@ import random
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # 창을 실제 화면에 띄우지 않는다
 
 import pytest
-from conftest import DEFAULT_CSV, write_csv
+from conftest import DEFAULT_CSV, DEFAULT_DAY_COUNT, DEFAULT_WORD_COUNT, write_csv
 
 from smartvoca.core.models import DayStatus, Exam, Question
 from smartvoca.session import AppSession
@@ -74,10 +74,10 @@ def test_메인_화면이_처음_상태를_보여_준다(window):
     assert window.stack.currentWidget() is home
     assert home.today_label.text() == "1일차"
     assert home.start_button.text() == "1일차 학습 시작"
-    assert home.progress_label.text() == "0 / 100 일차 완료"
+    assert home.progress_label.text() == f"0 / {DEFAULT_DAY_COUNT} 일차 완료"
     assert not home.past_days_button.isEnabled()
     assert home.wrong_button.title() == "오답 학습 (0)"
-    assert "기본 토익 2,000 단어" in home.wordbook_label.text()
+    assert f"기본 토익 {DEFAULT_WORD_COUNT:,} 단어" in home.wordbook_label.text()
 
 
 def test_하루_학습_흐름(window):
@@ -86,7 +86,7 @@ def test_하루_학습_흐름(window):
     card = window.card_page
     assert window.stack.currentWidget() is card
     assert card.header.info() == "1 / 20"
-    assert card.word_label.text() == "accommodate"
+    assert card.word_label.text() == "executive"  # 기본 단어장 첫 단어
     assert card.meaning_label.text() == window.session.words[0].meaning
     assert not card.prev_button.isEnabled()
     assert not card.action_button.isEnabled()
@@ -121,7 +121,7 @@ def test_하루_학습_흐름(window):
     result.home_button.click()
     home = window.home_page
     assert home.today_label.text() == "2일차"
-    assert home.progress_label.text() == "1 / 100 일차 완료"
+    assert home.progress_label.text() == f"1 / {DEFAULT_DAY_COUNT} 일차 완료"
     assert home.wrong_button.title() == "오답 학습 (3)"
     assert home.past_days_button.isEnabled()
 
@@ -235,13 +235,13 @@ def test_단어장을_불러오면_확인을_거쳐_교체된다(window, tmp_pat
     window.result_page.home_button.click()
     window.home_page.wordbook_button.click()
     page = window.wordbook_page
-    assert "기본 토익 2,000 단어 (100일차)" in page.current_label.text()
+    assert f"기본 토익 {DEFAULT_WORD_COUNT:,} 단어 ({DEFAULT_DAY_COUNT}일차)" in page.current_label.text()
 
     bad = write_csv(tmp_path / "bad.csv", ["word,meaning", "a,1", "A,2", "c,3", "d,4"])
     monkeypatch.setattr(dialogs, "ask_open_csv", lambda parent: bad)
     page.import_button.click()
     assert window.shown_dialogs[-1][0] == "show_validation_issues"
-    assert len(window.session.words) == 2000
+    assert len(window.session.words) == DEFAULT_WORD_COUNT
 
     good = write_csv(
         tmp_path / "good.csv", ["word,meaning"] + [f"w{i},뜻{i}" for i in range(45)]
@@ -253,7 +253,7 @@ def test_단어장을_불러오면_확인을_거쳐_교체된다(window, tmp_pat
     )
     page.import_button.click()
     assert asked == [("good.csv", 45, 3, 1, 1)]  # 파일명, 단어 수, 일차 수, 완료 일차, 오답 수
-    assert len(window.session.words) == 2000     # '취소'하면 그대로
+    assert len(window.session.words) == DEFAULT_WORD_COUNT     # '취소'하면 그대로
 
     monkeypatch.setattr(dialogs, "confirm_replace_wordbook", lambda *args: True)
     page.import_button.click()
@@ -273,7 +273,7 @@ def test_단어장과_오답_목록을_내보낸다(window, tmp_path, monkeypatc
     monkeypatch.setattr(dialogs, "ask_save_csv", lambda parent, title, name: next(targets))
     window.wordbook_page.export_wordbook_button.click()
     window.wordbook_page.export_wrong_button.click()
-    assert len((tmp_path / "wb.csv").read_text(encoding="utf-8-sig").splitlines()) == 2001
+    assert len((tmp_path / "wb.csv").read_text(encoding="utf-8-sig").splitlines()) == DEFAULT_WORD_COUNT + 1  # 헤더 포함
     assert len((tmp_path / "wrong.csv").read_text(encoding="utf-8-sig").splitlines()) == 2
 
 

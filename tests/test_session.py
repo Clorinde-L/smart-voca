@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 
 import pytest
-from conftest import DEFAULT_CSV, answers_with_wrong, write_csv
+from conftest import DEFAULT_CSV, DEFAULT_DAY_COUNT, DEFAULT_WORD_COUNT, answers_with_wrong, write_csv
 
 from smartvoca.core.cards import CardDeck
 from smartvoca.core.models import DayStatus, NoticeKind, WordbookSource
@@ -30,11 +30,13 @@ def finish_day(session: AppSession, day_no: int, wrong_words: set[str] = frozens
 def test_처음_실행하면_기본_단어장과_1일차로_시작한다(tmp_path):
     session = open_session(tmp_path)
     summary = session.summary()
-    assert len(session.words) == 2000 and len(session.days) == 100
+    assert len(session.words) == DEFAULT_WORD_COUNT and len(session.days) == DEFAULT_DAY_COUNT
     assert session.wordbook_source is WordbookSource.DEFAULT
     assert (summary.current_day, summary.done_days, summary.wrong_list_size) == (1, 0, 0)
     assert session.startup_notices == ()
-    assert [w.index for w in session.day_words(100)] == list(range(1980, 2000))
+    # 마지막 일차는 남은 단어만으로 구성된다 (FR-07)
+    last_day_start = (DEFAULT_DAY_COUNT - 1) * 20
+    assert [w.index for w in session.day_words(DEFAULT_DAY_COUNT)] == list(range(last_day_start, DEFAULT_WORD_COUNT))
 
 
 def test_기본_단어장이_없으면_시작할_수_없다(tmp_path):
@@ -184,7 +186,7 @@ def test_검증에_실패한_파일은_단어를_돌려주지_않는다(tmp_path
     bad = write_csv(tmp_path / "bad.csv", ["word,meaning", "a,1", "A,2", "c,3", "d,4"])
     words, issues = session.check_wordbook_file(bad)
     assert words == [] and [i.rule for i in issues] == ["V-05"]
-    assert len(session.words) == 2000
+    assert len(session.words) == DEFAULT_WORD_COUNT
 
 
 def test_단어장과_오답_목록을_내보낸다(tmp_path):

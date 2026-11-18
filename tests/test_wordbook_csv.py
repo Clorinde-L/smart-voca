@@ -4,7 +4,7 @@
 # 파일 위치: tests/test_wordbook_csv.py
 from __future__ import annotations
 
-from conftest import DEFAULT_CSV, make_words, write_csv
+from conftest import DEFAULT_CSV, DEFAULT_WORD_COUNT, make_words, write_csv
 
 from smartvoca.core.models import WordbookSource, WrongEntry
 from smartvoca.storage.wordbook_csv import (
@@ -24,10 +24,10 @@ def rules(issues):
 
 # ── 읽기 (FR-01) ────────────────────────────────────────────
 def test_기본_단어장을_읽는다(default_words):
-    assert len(default_words) == 2000
+    assert len(default_words) == DEFAULT_WORD_COUNT
     assert default_words[0].index == 0
-    assert default_words[-1].index == 1999
-    assert default_words[0].word == "accommodate"
+    assert default_words[-1].index == DEFAULT_WORD_COUNT - 1
+    assert default_words[0].word == "executive"
 
 
 def test_BOM_이_없는_파일도_읽는다(tmp_path):
@@ -153,7 +153,7 @@ def test_오답_목록이_주어진_순서대로_나간다(tmp_path):
 def test_사본이_없으면_기본_단어장을_쓴다(tmp_path):
     active = load_active_wordbook(tmp_path, DEFAULT_CSV)
     assert active.source is WordbookSource.DEFAULT
-    assert len(active.words) == 2000
+    assert len(active.words) == DEFAULT_WORD_COUNT
 
 
 def test_교체한_단어장이_다시_열어도_유지된다(tmp_path):
@@ -167,7 +167,7 @@ def test_망가진_사본은_보존하고_기본_단어장으로_시작한다(tm
     write_csv(tmp_path / "wordbook.csv", ["잘못된,헤더", "a,b"])
     active = load_active_wordbook(tmp_path, DEFAULT_CSV)
     assert active.source is WordbookSource.DEFAULT
-    assert len(active.words) == 2000
+    assert len(active.words) == DEFAULT_WORD_COUNT
     assert active.invalid_backup_path is not None and active.invalid_backup_path.exists()
     assert not (tmp_path / "wordbook.csv").exists()
 

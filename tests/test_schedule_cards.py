@@ -43,10 +43,11 @@ def test_기본_단어장의_일차에_단어가_겹치지_않는다(default_wor
     seen = set()
     for day in build_days(len(default_words)):
         day_words = {w.word for w in default_words[day.start : day.end]}
-        assert len(day_words) == 20
+        assert len(day_words) == day.end - day.start
+        assert len(day_words) == 20 or day.day_no == len(build_days(len(default_words)))  # 마지막 일차만 20개 미만
         assert not seen & day_words
         seen |= day_words
-    assert len(seen) == 2000
+    assert len(seen) == len(default_words)
 
 
 @pytest.mark.parametrize("word_count, day_size", [(0, 20), (10, 0)])

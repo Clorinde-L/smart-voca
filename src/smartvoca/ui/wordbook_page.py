@@ -49,7 +49,7 @@ class WordbookPage(QWidget):
             "단어장 불러오기",
             "CSV 파일(word,meaning)을 단어장으로 씁니다. "
             "단어장을 바꾸면 학습 기록이 모두 지워집니다.\n"
-            "기본 단어장으로 되돌리려면 data/toeic_words_2000.csv 를 불러오세요.",
+            "기본 단어장으로 되돌리려면 data/toeic_words.csv 를 불러오세요.",
             "불러오기",
             self.import_clicked,
         )
