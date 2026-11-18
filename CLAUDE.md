@@ -265,7 +265,7 @@ smart-voca/
 - **계층 규칙**: `core` 는 표준 라이브러리만 쓰고 파일을 다루지 않는다. 화면은 `AppSession` 만 부른다.
   색·글꼴은 `ui/theme.py`, 대화상자는 `ui/dialogs.py` 에만 둔다.
 - **기본 단어장**: `data/toeic_words_2000.csv` 는 직접 고치지 않는다. 원본 `ai-agent/claude/261021_토익단어2000/data/*.tsv` 를
-  고친 뒤 `script/build_csv.py` 로 다시 만든다. 뜻 내용은 사용자 검수 전이다.
+  고친 뒤 `script/build_csv.py` 로 다시 만든다. 뜻은 1차 검수 완료(`ai-agent/claude/검토_261118_단어장 뜻 검수.md`), 이후 발견분은 원본 TSV 에 반영한다.
 - **화면 확인**: 창을 띄우지 않고 스크린샷을 찍을 때는 `QT_QPA_PLATFORM=offscreen` 과 `QT_QPA_FONTDIR=C:/Windows/Fonts` 를
   함께 준다. 글꼴 폴더를 주지 않으면 한글이 네모로 나온다.
 - **콘솔 한글**: Git Bash 에서 Python 이 한글 경로를 출력하면 깨져 보일 수 있다. 파일 내용은 정상이다.
