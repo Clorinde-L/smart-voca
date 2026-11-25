@@ -1,223 +1,222 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-11 - smart-voca - AppSession 흐름 테스트: 기획서 §10.1 성공 기준을 화면 없이 검증
+# 2026-11-11 - smart-voca - AppSession 흐름 테스트: 암기·시험·오답·단어 관리·가져오기·통계가 DB 에 남는가
 # 파일 위치: tests/test_session.py
+# 2026-11-25 SQLite 전환(ADR-25)과 VOCA-FR 기능에 맞춰 다시 씀
 from __future__ import annotations
 
 import random
+import sqlite3
+from contextlib import closing
 
 import pytest
-from conftest import DEFAULT_CSV, DEFAULT_DAY_COUNT, DEFAULT_WORD_COUNT, answers_with_wrong, write_csv
+from conftest import DEFAULT_CSV, DEFAULT_DAY_COUNT, DEFAULT_WORD_COUNT, right_answers
 
-from smartvoca.core.cards import CardDeck
-from smartvoca.core.models import DayStatus, NoticeKind, WordbookSource
-from smartvoca.session import AppSession, WordbookLoadError
-from smartvoca.storage.wordbook_csv import write_wordbook_csv
+from smartvoca.core.models import (
+    DayStatus,
+    Direction,
+    ExamKind,
+    ImportMode,
+    QuestionFormat,
+    Settings,
+    StudyKind,
+)
+from smartvoca.session import AppSession, WordInputError
 
-
-def open_session(base_dir, seed=1) -> AppSession:
-    return AppSession.open(base_dir, DEFAULT_CSV, random.Random(seed))
-
-
-def finish_day(session: AppSession, day_no: int, wrong_words: set[str] = frozenset()):
-    """한 일차를 암기하고 시험까지 본다."""
-    session.complete_memorize(day_no)
-    exam = session.build_day_exam(day_no)
-    return session.submit_day_exam(day_no, exam, answers_with_wrong(exam, wrong_words))
+EN_KO, CHOICE = Direction.EN_KO, QuestionFormat.CHOICE
 
 
-# ── 시작 ────────────────────────────────────────────────────
-def test_처음_실행하면_기본_단어장과_1일차로_시작한다(tmp_path):
-    session = open_session(tmp_path)
+def rows(session: AppSession, sql: str, *params):
+    with closing(sqlite3.connect(session.db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        return conn.execute(sql, params).fetchall()
+
+
+def memorize(session: AppSession, day_no: int) -> None:
+    session.complete_memorize(day_no, session.day_cards(day_no))
+
+
+def take_day_exam(session, day_no, wrong=frozenset(), fmt=CHOICE, direction=EN_KO):
+    exam = session.build_exam(ExamKind.DAY, direction, fmt, day_no=day_no)
+    return session.submit_exam(ExamKind.DAY, exam, right_answers(exam, set(wrong)), direction, fmt, day_no)
+
+
+# ── 시작 (VOCA-NFR-003) ─────────────────────────────────────
+def test_처음_실행하면_테이블과_기본_단어장으로_시작한다(session):
     summary = session.summary()
-    assert len(session.words) == DEFAULT_WORD_COUNT and len(session.days) == DEFAULT_DAY_COUNT
-    assert session.wordbook_source is WordbookSource.DEFAULT
-    assert (summary.current_day, summary.done_days, summary.wrong_list_size) == (1, 0, 0)
-    assert session.startup_notices == ()
-    # 마지막 일차는 남은 단어만으로 구성된다 (FR-07)
-    last_day_start = (DEFAULT_DAY_COUNT - 1) * 20
-    assert [w.index for w in session.day_words(DEFAULT_DAY_COUNT)] == list(range(last_day_start, DEFAULT_WORD_COUNT))
+    assert (summary.total_words, summary.total_days) == (DEFAULT_WORD_COUNT, DEFAULT_DAY_COUNT)
+    assert summary.current_day == 1 and summary.done_days == 0 and summary.memorized_words == 0
 
 
-def test_기본_단어장이_없으면_시작할_수_없다(tmp_path):
-    with pytest.raises(WordbookLoadError):
-        AppSession.open(tmp_path, tmp_path / "none.csv")
+def test_다시_열어도_기록이_남는다(tmp_path, clock):
+    path = tmp_path / "voca.db"
+    first = AppSession.open(path, DEFAULT_CSV, random.Random(1), clock)
+    memorize(first, 1)
+    take_day_exam(first, 1, wrong={"executive"})
+    again = AppSession.open(path, DEFAULT_CSV, random.Random(2), clock)
+    assert again.day(1)[0] is DayStatus.DONE
+    assert [e.word.word for e in again.wrong_list()] == ["executive"]
+    assert len(again.words()) == DEFAULT_WORD_COUNT  # 기본 단어장을 두 번 넣지 않는다
 
 
-# ── 일차 학습 → 시험 (성공 기준 2) ────────────────────────────
-def test_암기_전에는_시험을_볼_수_없다(tmp_path):
-    session = open_session(tmp_path)
+# ── 암기 (VOCA-FR-011 ~ 014) ────────────────────────────────
+def test_카드를_모두_보면_암기_이력이_남고_시험을_볼_수_있다(session, clock):
     with pytest.raises(ValueError):
-        session.build_day_exam(1)
+        session.build_exam(ExamKind.DAY, EN_KO, CHOICE, day_no=1)
+    memorize(session, 1)
+    assert session.day(1)[0] is DayStatus.MEMORIZED
+    logged = rows(session, "SELECT user_id, word, day_no, kind, studied_at FROM study_log")
+    assert len(logged) == 20
+    assert {(r["user_id"], r["day_no"], r["kind"], r["studied_at"]) for r in logged} == {(1, 1, "new", "2026-11-25T09:00:00")}
 
 
-def test_카드를_모두_보면_시험이_열리고_결과가_저장된다(tmp_path):
-    session = open_session(tmp_path)
-    deck = CardDeck(session.day_words(1))
-    while deck.next():
-        pass
-    assert deck.seen_all
-    session.complete_memorize(1)
-    assert session.day_status(1) is DayStatus.MEMORIZED
-
-    exam = session.build_day_exam(1)
-    wrong_words = {exam.questions[0].word, exam.questions[1].word}
-    result = session.submit_day_exam(1, exam, answers_with_wrong(exam, wrong_words))
-
-    assert (result.correct_count, result.total) == (18, 20)
-    assert session.day_status(1) is DayStatus.DONE
-    assert session.day_status(2) is DayStatus.AVAILABLE
-    assert {e.word for e in session.wrong_list()} == wrong_words
+def test_일차_학습에_전날_단어와_틀린_단어가_섞인다(session):
+    memorize(session, 1)
+    take_day_exam(session, 1, wrong={"executive", "inventory"})
+    cards = session.day_cards(2)
+    assert [c.kind for c in cards[:20]] == [StudyKind.NEW] * 20
+    extra = cards[20:]
+    assert len(extra) == Settings().review_count
+    day1 = {w.word for w in session.day(1)[1]}
+    assert all(c.word.word in day1 for c in extra)
+    assert {c.word.word for c in extra} >= {"executive", "inventory"}  # 틀린 단어는 반드시 들어간다
+    assert any(c.kind is StudyKind.WRONG for c in extra)
 
 
-def test_아무_일차나_먼저_학습할_수_있다(tmp_path):
-    """잠금 없음 (ADR-21). 오늘의 학습 추천은 안 끝낸 가장 앞 일차 그대로다."""
-    session = open_session(tmp_path)
-    finish_day(session, 30)
-    assert session.day_status(30) is DayStatus.DONE
-    assert session.summary().current_day == 1
-    with pytest.raises(ValueError):
-        session.complete_memorize(len(session.days) + 1)  # 없는 일차
+def test_하루_학습량을_바꾸면_일차를_다시_나누고_외운_단어는_그대로다(session):
+    memorize(session, 1)  # 단어 1~20
+    session.save_settings(Settings(day_size=10))
+    summary = session.summary()
+    assert summary.total_days == -(-DEFAULT_WORD_COUNT // 10)
+    assert session.day(1)[0] is DayStatus.MEMORIZED and session.day(2)[0] is DayStatus.MEMORIZED
+    assert session.day(3)[0] is DayStatus.AVAILABLE
+    assert summary.memorized_words == 20
 
 
-def test_미응답_답안은_기록을_바꾸지_않는다(tmp_path):
-    session = open_session(tmp_path)
-    session.complete_memorize(1)
-    exam = session.build_day_exam(1)
-    with pytest.raises(ValueError):
-        session.submit_day_exam(1, exam, [None] * 20)
-    assert session.day_status(1) is DayStatus.MEMORIZED
-    assert session.wrong_list() == []
+# ── 시험 (VOCA-FR-021 ~ 026) ────────────────────────────────
+@pytest.mark.parametrize("fmt", list(QuestionFormat))
+def test_시험_문항마다_형식_방향_정오_시각이_DB_에_남는다(session, fmt):
+    memorize(session, 1)
+    outcome = take_day_exam(session, 1, wrong={"executive"}, fmt=fmt, direction=Direction.MIX)
+    assert (outcome.result.correct_count, outcome.result.total) == (19, 20)
+    [exam_row] = rows(session, "SELECT kind, day_no, direction, format, total, correct FROM exam_session")
+    assert tuple(exam_row) == ("day", 1, "mix", fmt.value, 20, 19)
+    items = rows(session, "SELECT word, format, direction, is_correct, answered_at FROM exam_item")
+    assert len(items) == 20
+    assert {r["direction"] for r in items} <= {"en_ko", "ko_en"}
+    assert [r["word"] for r in items if not r["is_correct"]] == ["executive"]
+    assert all(r["format"] == fmt.value and r["answered_at"] for r in items)
+    assert session.day(1)[0] is DayStatus.DONE
 
 
-# ── 재실행 후 복원 (성공 기준 5) ──────────────────────────────
-def test_다시_실행해도_진도와_오답이_복원된다(tmp_path):
-    session = open_session(tmp_path)
-    first_word = session.day_words(1)[0].word
-    finish_day(session, 1, {first_word})
-    finish_day(session, 2)
-    session.complete_memorize(3)
-
-    reopened = open_session(tmp_path, seed=99)
-    summary = reopened.summary()
-    assert (summary.current_day, summary.done_days, summary.wrong_list_size) == (3, 2, 1)
-    assert reopened.day_status(3) is DayStatus.MEMORIZED
-    assert reopened.reviewable_days() == [1, 2, 3]
-    assert reopened.wrong_list() == session.wrong_list()
+def test_실력_시험은_문제_수만큼_외운_단어에서_낸다(session):
+    exam = session.build_exam(ExamKind.RANDOM, EN_KO, CHOICE, count=7)  # 외운 단어가 없으면 전체에서
+    assert len(exam.questions) == 7
+    memorize(session, 3)
+    day3 = {w.id for w in session.day(3)[1]}
+    exam = session.build_exam(ExamKind.RANDOM, EN_KO, CHOICE, count=30)
+    assert len(exam.questions) == 20  # 외운 단어가 20개뿐
+    assert {q.target.id for q in exam.questions} == day3
+    outcome = session.submit_exam(ExamKind.RANDOM, exam, right_answers(exam), EN_KO, CHOICE)
+    assert outcome.result.correct_count == 20
+    assert session.day(3)[0] is DayStatus.MEMORIZED  # 실력 시험은 일차를 완료하지 않는다
 
 
-def test_깨진_기록으로_시작하면_알림이_생기고_초기_상태다(tmp_path):
-    (tmp_path / "progress.json").write_text("깨짐", encoding="utf-8")
-    session = open_session(tmp_path)
-    assert [n.kind for n in session.startup_notices] == [NoticeKind.PROGRESS_CORRUPT]
-    assert session.startup_notices[0].backup_path.exists()
-    assert session.summary().current_day == 1
-
-
-# ── 오답 학습·오답 시험 (성공 기준 3, 4) ───────────────────────
-def test_오답이_횟수_순으로_나오고_3번_연속_맞히면_빠진다(tmp_path):
-    session = open_session(tmp_path)
-    day1 = [w.word for w in session.day_words(1)]
-    finish_day(session, 1, {day1[0], day1[5]})
-    finish_day(session, 1, {day1[5]})  # 재시험: day1[5] 를 한 번 더 틀린다
-
-    entries = session.wrong_list()
-    assert [(e.word, e.wrong_count) for e in entries] == [(day1[5], 2), (day1[0], 1)]
-    assert [w.word for w in session.wrong_words()] == [day1[5], day1[0]]
-
-    graduated_log = []
+def test_오답이_횟수_순으로_나오고_오답_시험_3번_연속_맞히면_빠진다(session):
+    memorize(session, 1)
+    take_day_exam(session, 1, wrong={"executive", "inventory"})
+    take_day_exam(session, 1, wrong={"inventory"})
+    assert [(e.word.word, e.wrong_count) for e in session.wrong_list()] == [("inventory", 2), ("executive", 1)]
+    graduated = []
     for _ in range(3):
-        exam = session.build_wrong_exam()
-        assert len(exam.questions) == 2
-        _, graduated = session.submit_wrong_exam(exam, answers_with_wrong(exam, set()))
-        graduated_log.append(sorted(graduated))
-    assert graduated_log == [[], [], sorted([day1[0], day1[5]])]
+        exam = session.build_exam(ExamKind.WRONG, EN_KO, CHOICE)
+        graduated = session.submit_exam(ExamKind.WRONG, exam, right_answers(exam), EN_KO, CHOICE).graduated
+    assert set(graduated) == {"executive", "inventory"}
     assert session.wrong_list() == []
-
-    # 졸업한 단어를 일차 재시험에서 다시 틀리면 재등재되고 누적 횟수가 이어진다
-    finish_day(session, 1, {day1[5]})
-    assert [(e.word, e.wrong_count, e.streak) for e in session.wrong_list()] == [
-        (day1[5], 3, 0)
-    ]
-
-
-def test_오답_시험에서_틀리면_연속_정답이_0_으로_돌아간다(tmp_path):
-    session = open_session(tmp_path)
-    target = session.day_words(1)[0].word
-    finish_day(session, 1, {target})
-    for wrong in (set(), set(), {target}):
-        exam = session.build_wrong_exam()
-        session.submit_wrong_exam(exam, answers_with_wrong(exam, wrong))
-    entry = session.wrong_list()[0]
-    assert (entry.wrong_count, entry.streak) == (2, 0)
-
-    reopened = open_session(tmp_path)
-    assert reopened.wrong_list() == session.wrong_list()
-
-
-def test_오답이_없으면_오답_시험을_만들_수_없다(tmp_path):
     with pytest.raises(ValueError):
-        open_session(tmp_path).build_wrong_exam()
+        session.build_exam(ExamKind.WRONG, EN_KO, CHOICE)
 
 
-# ── 단어장 불러오기·내보내기 (FR-02 ~ FR-06) ───────────────────
-def test_단어장을_바꾸면_기록이_초기화되고_재실행해도_유지된다(tmp_path):
-    session = open_session(tmp_path / "userdata")
-    finish_day(session, 1, {session.day_words(1)[0].word})
-
-    source = tmp_path / "mine.csv"
-    write_csv(source, ["word,meaning"] + [f"w{i},뜻{i}" for i in range(45)])
-    words, issues = session.check_wordbook_file(source)
-    assert issues == [] and len(words) == 45
-    assert session.summary().done_days == 1  # 검증만으로는 아무것도 바뀌지 않는다
-
-    session.replace_wordbook(words)
-    summary = session.summary()
-    assert (summary.total_days, summary.current_day, summary.done_days) == (3, 1, 0)
-    assert summary.wrong_list_size == 0
-    assert len(session.day_words(3)) == 5
-    assert session.wordbook_source is WordbookSource.CUSTOM
-
-    source.unlink()  # 원본을 지워도 사본으로 열린다
-    reopened = open_session(tmp_path / "userdata")
-    assert len(reopened.words) == 45
-    assert reopened.wordbook_source is WordbookSource.CUSTOM
-    assert reopened.summary().done_days == 0
+def test_답하지_않은_시험은_아무것도_남기지_않는다(session):
+    memorize(session, 1)
+    exam = session.build_exam(ExamKind.DAY, EN_KO, CHOICE, day_no=1)
+    with pytest.raises(ValueError):
+        session.submit_exam(ExamKind.DAY, exam, [None] * 20, EN_KO, CHOICE, 1)
+    assert rows(session, "SELECT * FROM exam_session") == []
 
 
-def test_검증에_실패한_파일은_단어를_돌려주지_않는다(tmp_path):
-    session = open_session(tmp_path / "userdata")
-    bad = write_csv(tmp_path / "bad.csv", ["word,meaning", "a,1", "A,2", "c,3", "d,4"])
-    words, issues = session.check_wordbook_file(bad)
-    assert words == [] and [i.rule for i in issues] == ["V-05"]
-    assert len(session.words) == DEFAULT_WORD_COUNT
+# ── 단어 관리 (VOCA-FR-001 ~ 003) ───────────────────────────
+def test_단어를_등록_수정_삭제한다(small_session):
+    word = small_session.add_word("  agenda ", "[명]  안건 ")
+    assert (word.word, word.meaning, word.index) == ("agenda", "[명] 안건", 45)
+    with pytest.raises(WordInputError, match="이미 등록"):
+        small_session.add_word("AGENDA", "x")
+    with pytest.raises(WordInputError):
+        small_session.add_word("", "")
+    small_session.update_word(word.id, "agendas", "안건들")
+    assert small_session.get_word(word.id).word == "agendas"
+    small_session.delete_word(word.id)
+    assert small_session.get_word(word.id) is None
+    with pytest.raises(LookupError):
+        small_session.delete_word(word.id)
 
 
-def test_단어장과_오답_목록을_내보낸다(tmp_path):
-    session = open_session(tmp_path / "userdata")
-    target = session.day_words(1)[3]
-    finish_day(session, 1, {target.word})
-
-    wordbook_path, wrong_path = tmp_path / "wb.csv", tmp_path / "wrong.csv"
-    session.export_wordbook(wordbook_path)
-    session.export_wrong_list(wrong_path)
-
-    words, issues = session.check_wordbook_file(wordbook_path)
-    assert issues == [] and tuple(words) == session.words
-    lines = wrong_path.read_text(encoding="utf-8-sig").splitlines()
-    assert lines[0] == "word,meaning,wrong_count" and len(lines) == 2
-    assert lines[1].startswith(target.word + ",") and lines[1].endswith(",1")
+def test_단어를_더하면_마지막_일차가_다시_학습_전이_된다(small_session):
+    memorize(small_session, 3)  # 3일차 = 단어 41~45 (5개)
+    assert small_session.day(3)[0] is DayStatus.MEMORIZED
+    small_session.add_word("new", "새")
+    assert small_session.day(3)[0] is DayStatus.AVAILABLE
 
 
-def test_단어장이_바뀌어_없어진_단어의_기록은_시작할_때_걸러진다(tmp_path):
-    base = tmp_path / "userdata"
-    session = open_session(base)
-    day1 = [w.word for w in session.day_words(1)]
-    finish_day(session, 1, {day1[0], day1[1]})
+def test_CSV_추가는_있는_단어를_건너뛰고_바꾸기는_기록을_지운다(small_session):
+    data = "영단어,뜻\nw1,다른 뜻\nnew1,새1\nnew2,새2\nNEW1,중복\n".encode("utf-8-sig")
+    parsed, issues = small_session.check_wordbook_upload(data)
+    assert issues == []
+    report = small_session.import_wordbook(parsed, ImportMode.ADD)
+    assert (report.added, report.skipped_existing, report.skipped_in_file) == (2, 1, 1)
+    assert len(small_session.words()) == 47
+    assert small_session.words()[0].meaning == "뜻1"
 
-    # 기본 단어장에서 day1[0] 만 뺀 파일을 기본 단어장으로 삼아 다시 연다 (검수 후 수정 상황)
-    edited = tmp_path / "edited.csv"
-    write_wordbook_csv(edited, [w for w in session.words if w.word != day1[0]])
-    reopened = AppSession.open(base, edited, random.Random(1))
-    assert [e.word for e in reopened.wrong_list()] == [day1[1]]
-    assert reopened.summary().done_days == 1
+    memorize(small_session, 1)
+    report = small_session.import_wordbook(parsed, ImportMode.REPLACE)
+    assert report.added == 3
+    assert [w.word for w in small_session.words()] == ["w1", "new1", "new2"]
+    assert small_session.summary().memorized_words == 0
+    assert rows(small_session, "SELECT * FROM study_log") == []
+
+
+def test_내보내기(small_session):
+    assert small_session.export_wordbook_csv().decode("utf-8-sig").startswith("word,meaning\r\nw1,뜻1")
+    memorize(small_session, 1)
+    take_day_exam(small_session, 1, wrong={"w3"})
+    assert "w3,뜻3,1" in small_session.export_wrong_list_csv().decode("utf-8-sig")
+
+
+# ── 통계 (VOCA-FR-031 ~ 034) ────────────────────────────────
+def test_통계는_DB_이력에서_계산한다(session, clock):
+    memorize(session, 1)
+    take_day_exam(session, 1, wrong={"executive", "inventory"})      # 18/20
+    clock.advance(days=1)
+    take_day_exam(session, 1, wrong={"executive"})                   # 19/20
+    exam = session.build_exam(ExamKind.WRONG, EN_KO, CHOICE)
+    session.submit_exam(ExamKind.WRONG, exam, right_answers(exam, {"executive"}), EN_KO, CHOICE)  # 1/2
+
+    stats = session.stats()
+    assert stats.summary.current_day == 2 and stats.summary.memorized_words == 20
+    assert stats.exam_count == 3
+    assert stats.overall_ratio == pytest.approx((18 + 19 + 1) / 42)
+    assert [(p.correct, p.total) for p in stats.by_session] == [(18, 20), (19, 20), (1, 2)]
+    assert [(p.label, p.correct, p.total) for p in stats.by_date] == [
+        ("2026-11-25", 18, 20),
+        ("2026-11-26", 20, 22),
+    ]
+    assert [(f.word, f.wrong_count) for f in stats.frequent_wrong] == [("executive", 3), ("inventory", 1)]
+
+
+def test_지운_단어도_통계_이력에는_남는다(small_session):
+    memorize(small_session, 1)
+    take_day_exam(small_session, 1, wrong={"w2"})
+    small_session.delete_word(small_session.words()[1].id)
+    stats = small_session.stats()
+    assert stats.frequent_wrong[0].word == "w2" and stats.frequent_wrong[0].meaning == "뜻2"
+    assert stats.by_session[0].total == 20

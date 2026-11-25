@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-11 - smart-voca - 단어장 CSV 읽기·검증·쓰기, 단어장 사본 관리 (PR-01, PR-12, PR-13)
+# 2026-11-11 - smart-voca - 단어장 CSV 읽기·검증·쓰기 (PR-01, PR-13, VOCA-FR-003)
 # 파일 위치: src/smartvoca/storage/wordbook_csv.py
-"""단어장 CSV 저장소.
+"""단어장 CSV.
+
+2026-11-25 바뀐 점 (ADR-25, ADR-28)
+- 업로드한 파일은 디스크에 저장하지 않고 메모리에서 읽는다 (서버는 /data·/tmp 말고는 쓸 수 없다).
+- 헤더는 `word,meaning` 과 과제 제공 CSV 의 `영단어,뜻` 둘 다 받는다.
+- 파일 안의 중복 단어는 오류가 아니라 "첫 줄만 쓰고 건너뜀"이다. 건너뛴 줄 번호를 알려 준다.
+- 내보내기는 파일 대신 문자열을 돌려준다. 다운로드는 화면이 보낸다.
 
 검증 실패는 예외가 아니라 ValidationIssue 목록으로 돌려준다.
 잘못된 파일은 사용자가 흔히 겪는 상황이라 화면이 그대로 목록을 보여 주면 되기 때문이다.
@@ -15,164 +21,120 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.models import (
-    CHOICE_COUNT,
-    ActiveWordbook,
+    MAX_MEANING_LENGTH,
+    MAX_WORD_LENGTH,
+    ParsedWordbook,
     ValidationIssue,
     Word,
-    WordbookSource,
     WrongEntry,
 )
-from .fileutil import atomic_write_text, move_aside
+from ..core.validation import clean_text
 
 CSV_ENCODING = "utf-8-sig"  # 쓸 때는 BOM 을 붙이고(엑셀 한글 깨짐 방지), 읽을 때는 있든 없든 처리한다
+FALLBACK_ENCODING = "cp949"  # 엑셀에서 "CSV" 로 저장한 한글 파일
+ACCEPTED_HEADERS = (("word", "meaning"), ("영단어", "뜻"))
 WORDBOOK_HEADER = ("word", "meaning")
 WRONG_LIST_HEADER = ("word", "meaning", "wrong_count")
-WORDBOOK_FILENAME = "wordbook.csv"
-
-Row = tuple[int, list[str]]  # (파일의 줄 번호, 열 목록)
 
 
-def _read_rows(path: Path) -> tuple[list[Row], ValidationIssue | None]:
-    """CSV 를 (줄 번호, 열 목록)으로 읽는다. 완전히 빈 줄은 건너뛴다."""
+def decode_csv_bytes(data: bytes) -> tuple[str | None, ValidationIssue | None]:
+    """올린 파일의 바이트를 글로 바꾼다. UTF-8(BOM 유무 무관)을 먼저, 안 되면 CP949 로."""
+    for encoding in (CSV_ENCODING, FALLBACK_ENCODING):
+        try:
+            return data.decode(encoding), None
+        except UnicodeDecodeError:
+            continue
+    return None, ValidationIssue("V-01", None, "파일을 읽을 수 없습니다. UTF-8 로 저장한 CSV 를 골라 주세요.")
+
+
+def parse_wordbook_text(text: str) -> tuple[ParsedWordbook | None, list[ValidationIssue]]:
+    """단어장 CSV 글을 읽고 검증한다 (데이터 설계서 §6, 규칙 V-02 ~ V-06).
+
+    위반이 하나라도 있으면 (None, 위반 목록)을 돌려준다 — 일부만 들어가는 일이 없게 한다.
+    """
     try:
-        with open(path, encoding=CSV_ENCODING, newline="") as file:
-            reader = csv.reader(file)
-            rows = [(reader.line_num, row) for row in reader if row]
-    except UnicodeDecodeError:
-        return [], ValidationIssue(
-            "V-01", None, "파일을 UTF-8 로 읽을 수 없습니다. UTF-8 로 저장해 주세요."
-        )
-    except (OSError, csv.Error) as error:
-        return [], ValidationIssue("V-01", None, f"파일을 읽을 수 없습니다: {error}")
-    return rows, None
-
-
-def validate_wordbook_rows(rows: Sequence[Row]) -> list[ValidationIssue]:
-    """단어장 검증 규칙 V-02 ~ V-07 (데이터 설계서 §6). rows 의 첫 항목이 헤더다."""
+        reader = csv.reader(io.StringIO(text, newline=""))
+        rows = [(reader.line_num, row) for row in reader if any(cell.strip() for cell in row)]
+    except csv.Error as error:
+        return None, [ValidationIssue("V-01", None, f"CSV 형식이 올바르지 않습니다: {error}")]
     if not rows:
-        return [ValidationIssue("V-02", None, "파일이 비어 있습니다. 첫 줄은 word,meaning 이어야 합니다.")]
+        return None, [ValidationIssue("V-02", None, "파일이 비어 있습니다. 첫 줄은 영단어,뜻 이어야 합니다.")]
 
     header_line, header = rows[0]
-    if tuple(cell.strip().lower() for cell in header) != WORDBOOK_HEADER:
-        return [
+    if tuple(cell.strip().lower() for cell in header) not in ACCEPTED_HEADERS:
+        return None, [
             ValidationIssue(
                 "V-02",
                 header_line,
-                f"첫 줄은 word,meaning 이어야 합니다. (현재: {','.join(header)})",
+                f"첫 줄은 영단어,뜻 또는 word,meaning 이어야 합니다. (현재: {','.join(header)})",
             )
         ]
 
-    issues = []
-    first_line_of = {}  # casefold 한 영단어 → 처음 나온 줄 번호
+    issues: list[ValidationIssue] = []
+    entries: list[tuple[str, str]] = []
+    duplicate_lines: list[int] = []
+    seen: set[str] = set()  # casefold 한 영단어
     for line_no, row in rows[1:]:
         if len(row) != 2:
-            issues.append(
-                ValidationIssue("V-03", line_no, f"열이 2개여야 합니다. (현재 {len(row)}개)")
-            )
+            issues.append(ValidationIssue("V-03", line_no, f"열이 2개여야 합니다. (현재 {len(row)}개)"))
             continue
-        word, meaning = row[0].strip(), row[1].strip()
+        word, meaning = clean_text(row[0]), clean_text(row[1])
         if not word or not meaning:
-            empty_column = "word" if not word else "meaning"
-            issues.append(ValidationIssue("V-04", line_no, f"{empty_column} 칸이 비어 있습니다."))
+            column = "영단어" if not word else "뜻"
+            issues.append(ValidationIssue("V-04", line_no, f"{column} 칸이 비어 있습니다."))
             continue
-        key = word.casefold()  # 대소문자만 다른 단어도 중복으로 본다
-        if key in first_line_of:
+        if len(word) > MAX_WORD_LENGTH or len(meaning) > MAX_MEANING_LENGTH:
             issues.append(
                 ValidationIssue(
-                    "V-05",
-                    line_no,
-                    f'단어 "{word}" 가 {first_line_of[key]}번째 줄과 중복됩니다.',
+                    "V-04", line_no, f"영단어는 {MAX_WORD_LENGTH}자, 뜻은 {MAX_MEANING_LENGTH}자 이하여야 합니다."
                 )
             )
-        else:
-            first_line_of[key] = line_no
+            continue
+        key = word.casefold()  # 대소문자만 다른 단어도 같은 단어로 본다
+        if key in seen:
+            duplicate_lines.append(line_no)
+            continue
+        seen.add(key)
+        entries.append((word, meaning))
     if issues:
-        return issues
-
-    # 4지선다를 만들 수 있는 최소 크기인지 본다
-    word_count = len(rows) - 1
-    if word_count < CHOICE_COUNT:
-        return [
-            ValidationIssue(
-                "V-06", None, f"단어가 {CHOICE_COUNT}개 이상 있어야 합니다. (현재 {word_count}개)"
-            )
-        ]
-    distinct_meaning_count = len({row[1].strip() for _, row in rows[1:]})
-    if distinct_meaning_count < CHOICE_COUNT:
-        return [
-            ValidationIssue(
-                "V-07",
-                None,
-                f"서로 다른 뜻이 {CHOICE_COUNT}개 이상 있어야 합니다. (현재 {distinct_meaning_count}개)",
-            )
-        ]
-    return []
+        return None, issues
+    if not entries:
+        return None, [ValidationIssue("V-06", None, "등록할 단어가 없습니다.")]
+    return ParsedWordbook(tuple(entries), tuple(duplicate_lines)), []
 
 
-def read_wordbook_csv(path: Path) -> tuple[list[Word], list[ValidationIssue]]:
-    """단어장 CSV 를 읽고 검증한다. 위반이 있으면 ([], 위반 목록)을 돌려준다 (FR-01, FR-02)."""
-    rows, read_issue = _read_rows(Path(path))
-    if read_issue is not None:
-        return [], [read_issue]
-    issues = validate_wordbook_rows(rows)
-    if issues:
-        return [], issues
-    words = [
-        Word(index=index, word=row[0].strip(), meaning=row[1].strip())
-        for index, (_, row) in enumerate(rows[1:])
-    ]
-    return words, []
+def read_wordbook_csv(path: Path) -> tuple[ParsedWordbook | None, list[ValidationIssue]]:
+    """디스크의 단어장 CSV (기본 단어장 등록에 쓴다, FR-01)."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError as error:
+        return None, [ValidationIssue("V-01", None, f"파일을 읽을 수 없습니다: {error}")]
+    text, issue = decode_csv_bytes(data)
+    if issue is not None:
+        return None, [issue]
+    return parse_wordbook_text(text)
 
 
 def _to_csv_text(header: Sequence[str], rows: Sequence[Sequence[object]]) -> str:
     buffer = io.StringIO()
-    writer = csv.writer(buffer)  # 쉼표·큰따옴표가 든 값은 csv 모듈이 알아서 감싼다
+    writer = csv.writer(buffer, lineterminator="\r\n")  # 쉼표·큰따옴표가 든 값은 csv 모듈이 감싼다
     writer.writerow(header)
     writer.writerows(rows)
     return buffer.getvalue()
 
 
-def write_wordbook_csv(path: Path, words: Sequence[Word]) -> None:
-    """단어장을 word,meaning CSV 로 쓴다 (FR-05)."""
-    text = _to_csv_text(WORDBOOK_HEADER, [(word.word, word.meaning) for word in words])
-    atomic_write_text(Path(path), text, CSV_ENCODING)
+def wordbook_csv_text(words: Sequence[Word]) -> str:
+    """단어장을 word,meaning CSV 글로 (FR-05). 다시 가져오면 같은 단어장이 된다."""
+    return _to_csv_text(WORDBOOK_HEADER, [(word.word, word.meaning) for word in words])
 
 
-def write_wrong_list_csv(
-    path: Path, entries: Sequence[WrongEntry], wordbook: Sequence[Word]
-) -> None:
-    """오답 목록을 word,meaning,wrong_count CSV 로 쓴다. 순서는 entries 그대로다 (FR-06)."""
+def wrong_list_csv_text(entries: Sequence[WrongEntry]) -> str:
+    """오답 목록을 word,meaning,wrong_count CSV 글로 (FR-06). 순서는 entries 그대로다."""
     if not entries:
         raise ValueError("내보낼 오답 단어가 없습니다")
-    meaning_of = {word.word: word.meaning for word in wordbook}
-    rows = [(entry.word, meaning_of[entry.word], entry.wrong_count) for entry in entries]
-    atomic_write_text(Path(path), _to_csv_text(WRONG_LIST_HEADER, rows), CSV_ENCODING)
+    rows = [(entry.word.word, entry.word.meaning, entry.wrong_count) for entry in entries]
+    return _to_csv_text(WRONG_LIST_HEADER, rows)
 
 
-def replace_wordbook(base_dir: Path, words: Sequence[Word]) -> None:
-    """검증을 통과한 단어 목록을 사용자 단어장 사본으로 저장한다 (FR-03).
-
-    사용자가 고른 원본 파일을 계속 읽지 않고 사본을 두는 이유:
-    원본이 옮겨지거나 지워져도 다음 실행 때 같은 단어장이 열려야 하기 때문이다.
-    """
-    write_wordbook_csv(Path(base_dir) / WORDBOOK_FILENAME, words)
-
-
-def load_active_wordbook(base_dir: Path, default_csv_path: Path) -> ActiveWordbook:
-    """시작할 때 쓸 단어장을 고른다: 사용자 단어장 사본이 있으면 그것, 없으면 기본 단어장."""
-    custom_path = Path(base_dir) / WORDBOOK_FILENAME
-    invalid_backup_path = None
-    if custom_path.exists():
-        words, issues = read_wordbook_csv(custom_path)
-        if not issues:
-            return ActiveWordbook(tuple(words), WordbookSource.CUSTOM)
-        # 사본이 망가졌으면 보존해 두고 기본 단어장으로 넘어간다 (데이터 설계서 §6.3)
-        invalid_backup_path = move_aside(custom_path, "invalid")
-
-    words, issues = read_wordbook_csv(Path(default_csv_path))
-    return ActiveWordbook(
-        words=tuple(words),
-        source=WordbookSource.DEFAULT,
-        issues=tuple(issues),
-        invalid_backup_path=invalid_backup_path,
-    )
+def encode_csv(text: str) -> bytes:
+    return text.encode(CSV_ENCODING)

@@ -5,8 +5,11 @@
 """경로는 이 모듈에서만 정한다. 다른 모듈은 경로를 인자로 받는다 (시스템 구조 §5.2)."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+DB_PATH_ENV = "DB_PATH"   # 서버에서는 /data/voca.db (Dockerfile, R-06)
 
 
 def base_dir() -> Path:
@@ -26,3 +29,9 @@ def default_wordbook_path() -> Path:
 
 def userdata_dir() -> Path:
     return base_dir() / "userdata"
+
+
+def db_path() -> Path:
+    """SQLite 파일. 환경변수 DB_PATH 가 있으면 그것, 없으면 로컬 실행용 userdata/voca.db (ADR-25)."""
+    configured = os.environ.get(DB_PATH_ENV, "").strip()
+    return Path(configured) if configured else userdata_dir() / "voca.db"
