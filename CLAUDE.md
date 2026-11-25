@@ -13,9 +13,9 @@
 | 레이어 | 기술 |
 |--------|------|
 | 언어 | Python 3.12 (최소 3.11) |
-| 주요 라이브러리 | PyQt6 (UI), pytest (테스트). 로직은 표준 라이브러리만 사용 |
+| 주요 라이브러리 | Flask (웹 화면, 2026-11-25 PyQt6 에서 교체 · ADR-18), pytest (테스트). 로직은 표준 라이브러리만 사용 |
 | 저장소 | 단어장 CSV, 학습 기록 JSON (`userdata/progress.json`) |
-| 실행 환경 | 로컬 Windows 11, 프로젝트 가상환경 `.venv` |
+| 실행 환경 | 로컬 Windows 11, 프로젝트 가상환경 `.venv`. 로컬 웹 서버 `127.0.0.1:8765` + 브라우저 |
 
 ## 상위 정책 참조
 
@@ -43,7 +43,7 @@ smart-voca/
 │   ├── core/                     # 도메인 로직 (표준 라이브러리만, 파일·화면을 다루지 않음)
 │   ├── storage/                  # 단어장 CSV, 학습 기록 JSON
 │   ├── session.py                # 화면이 쓰는 유일한 창구 (AppSession)
-│   └── ui/                       # PyQt6 화면
+│   └── web/                      # Flask 웹 화면 (app.py, state.py, templates/, static/)
 ├── tests/                        # pytest
 ├── data/toeic_words.csv          # 기본 단어장 (프로그램은 읽기만 함)
 ├── userdata/                     # 학습 기록, 단어장 사본 (커밋 제외, 실행하면 생성)
@@ -89,11 +89,12 @@ smart-voca/
 
 ## 테스트 및 배포
 
-- **테스트**: `.venv\Scripts\python -m pytest` (로직·저장소·세션·화면 흐름·계층 의존 규칙). 화면 흐름 테스트는 `QT_QPA_PLATFORM=offscreen` 으로 창을 띄우지 않고 돈다.
-- **실행**: `.venv\Scripts\python -m smartvoca` (최초 1회 `pip install -e ".[dev]"`). 컨테이너·배포 없음.
+- **테스트**: `.venv\Scripts\python -m pytest` (로직·저장소·세션·화면 흐름·계층 의존 규칙). 화면 흐름 테스트(`tests/test_web_flow.py`)는 Flask 테스트 클라이언트로 서버·브라우저 없이 돈다.
+- **실행**: `.venv\Scripts\python -m smartvoca` (최초 1회 `pip install -e ".[dev]"`). 서버를 띄우고 브라우저를 연다. 컨테이너·배포 없음.
 - **패키지 설치**: 시스템 Python 이 아니라 `.venv` 에만 설치한다 (결정 기록 ADR-08).
 - **주의**: 실행하면 `userdata/` 에 학습 기록이 생긴다(커밋 제외). 처음 상태로 돌리려면 `userdata/` 를 지운다.
-- **주의**: 로직 계층(`core`, `storage`, `session.py`)에서 PyQt 를 import 하면 `tests/test_architecture.py` 가 실패한다.
+- **주의**: 로직 계층(`core`, `storage`, `session.py`)에서 Flask·`web` 을 import 하거나, `web` 이 `storage` 를 직접 import 하면 `tests/test_architecture.py` 가 실패한다.
+- **주의**: 화면을 직접 확인할 때 `python -m smartvoca` 는 실제 `userdata/` 를 쓴다. 기록을 건드리지 않으려면 임시 폴더로 `AppSession` 을 연 확인용 서버를 scratchpad 에 따로 띄운다.
 
 ## 코드 작성 규칙
 
@@ -270,10 +271,11 @@ smart-voca/
   결정은 `docs/설계_261111_결정 기록` 의 `ADR-xx` 로 찾는다. 설계와 다르게 구현하게 되면 문서도 함께 고친다.
 - **승인된 문서 수정**: `docs/` 의 문서는 사용자 승인 없이 고치지 않는다. 고칠 때는 문서 관리 규칙 5 의 `docs/` 문서 수정 절차(같은 파일 직접 수정)를 따른다.
 - **계층 규칙**: `core` 는 표준 라이브러리만 쓰고 파일을 다루지 않는다. 화면은 `AppSession` 만 부른다.
-  색·글꼴은 `ui/theme.py`, 대화상자는 `ui/dialogs.py` 에만 둔다.
+  색·글꼴은 `web/static/style.css` 의 `:root` 변수에만 둔다. 화면 판단(버튼 활성 등)은 `web/app.py`·`web/state.py` 에서 하고 템플릿·JS 는 그리기만 한다.
 - **기본 단어장**: `data/toeic_words.csv`(2,109개, 106일차)는 직접 고치지 않는다. 원본 `ai-agent/claude/261118_PDF단어장/data/toeic_words.tsv` 를
   고친 뒤 같은 폴더의 `script/build_csv.py` 로 다시 만든다. 원본은 토익 단어목록 PDF(`ai-agent/uploads/`)에서 뽑았고(ADR-15) 뜻은 검수 전이다.
   옛 단어장 원본 `261021_토익단어2000/` 은 기록으로만 남긴다. 단어 수가 바뀌면 `tests/conftest.py` 의 `DEFAULT_WORD_COUNT`·`DEFAULT_DAY_COUNT` 를 고친다.
-- **화면 확인**: 창을 띄우지 않고 스크린샷을 찍을 때는 `QT_QPA_PLATFORM=offscreen` 과 `QT_QPA_FONTDIR=C:/Windows/Fonts` 를
-  함께 준다. 글꼴 폴더를 주지 않으면 한글이 네모로 나온다.
+- **화면 확인**: 확인용 서버를 띄운 뒤 headless Chrome 으로 찍는다.
+  `"C:/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --window-size=960,760 --screenshot=파일.png http://127.0.0.1:포트/경로`.
+  JS 동작(단축키, 0.3초 자동 넘김, 시험 중단 대화상자)은 pytest 로 검사하지 않으므로 바꿨으면 실제 브라우저에서 눌러 본다.
 - **콘솔 한글**: Git Bash 에서 Python 이 한글 경로를 출력하면 깨져 보일 수 있다. 파일 내용은 정상이다.
