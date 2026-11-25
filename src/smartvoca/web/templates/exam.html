@@ -1,9 +1,12 @@
 {#- 2026-11-25 - smart-voca - S-03 시험 응시: 일차 시험·오답 시험 공용. 정오는 보여 주지 않는다 (ADR-10)
     파일 위치: src/smartvoca/web/templates/exam.html -#}
 {% extends "base.html" %}
-{% from "macros.html" import page_header, key_hints %}
+{% from "macros.html" import page_header, key_hints, speak_button %}
 
 {% block title %}{{ run.title }} · 스마트 보카{% endblock %}
+{#- 시험 중에는 메뉴 막대를 숨긴다. 나가려면 '뒤로'(DL-03 확인)를 거친다 -#}
+{% block nav %}{% endblock %}
+{% block page_class %}no-nav{% endblock %}
 
 {% block header %}
   {#- '뒤로'는 링크가 아니라 그만두기 폼이다. 누르면 DL-03 으로 먼저 묻는다 -#}
@@ -40,7 +43,10 @@
 
 {% block content %}
   <section class="question">
-    <p class="question-word" data-testid="word">{{ question.word }}</p>
+    <div class="card-word-row">
+      <p class="question-word" data-testid="word">{{ question.word }}</p>
+      {{ speak_button(question.word, large=True, key="p") }}
+    </div>
     {#- 보기는 줄바꿈되는 버튼. 고르면 app.js 가 0.3초 뒤 폼을 보낸다 (UD-05) -#}
     <form method="post" action="{{ url_for('main.exam_answer') }}" class="choices" data-auto-advance>
       {% for choice in question.choices %}
@@ -86,5 +92,5 @@
 {% endblock %}
 
 {% block keyhints %}
-  {{ key_hints([("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
+  {{ key_hints([("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("P", "발음"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
 {% endblock %}

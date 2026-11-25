@@ -36,11 +36,6 @@ def test_이미_암기한_일차는_처음부터_잠금이_풀려_있다():
     assert not study.unlock_if_seen_all()
 
 
-def test_복습에는_시험_버튼이_없다():
-    assert not CardStudy.start(CardMode.REVIEW, "복습", make_words(2), 1).has_action
-    assert CardStudy.start(CardMode.WRONG, "오답", make_words(2)).has_action
-
-
 # ── 시험 ────────────────────────────────────────────────────
 def test_답을_고르면_다음_문제로_간다():
     run = make_run(3)

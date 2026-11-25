@@ -3,7 +3,7 @@
 {% extends "base.html" %}
 {% from "macros.html" import page_header %}
 
-{% block header %}{{ page_header("단어장 불러오기", url_for('main.wordbook')) }}{% endblock %}
+{% block header %}{{ page_header("단어장 불러오기", url_for('main.wordbook'), back_label="← 단어 목록") }}{% endblock %}
 
 {% block content %}
   {% if issues %}

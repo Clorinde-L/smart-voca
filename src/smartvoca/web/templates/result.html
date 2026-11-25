@@ -48,13 +48,21 @@
     <p class="empty" data-testid="perfect">틀린 단어가 없습니다</p>
   {% endif %}
 
-  <div class="row row-end">
-    <a class="button" href="{{ url_for('main.home') }}" data-key="Escape{% if not (view.is_wrong_exam or view.next_day) %} Enter{% endif %}">메인으로</a>
+  {#- 다음 추천은 안 끝낸 가장 앞 일차 (ADR-21). 방금 본 일차와 같으면 보이지 않는다 -#}
+  {% set show_next = not view.is_wrong_exam and view.next_day and view.next_day != view.day_no %}
+  <div class="row row-end wrap">
+    <a class="button" href="{{ url_for('main.home') }}" data-key="Escape{% if not (view.is_wrong_exam or show_next) %} Enter{% endif %}">메인으로</a>
+    {% if view.day_no %}
+      <a class="button" href="{{ url_for('main.day_detail', day_no=view.day_no) }}" data-testid="back-day">{{ view.day_no }}일차 단어 보기</a>
+    {% endif %}
+    {% if view.wrong_items %}
+      <a class="button" href="{{ url_for('main.wrong_list') }}">오답 목록 보기</a>
+    {% endif %}
     {% if view.is_wrong_exam %}
       <a class="button button-primary button-wide" href="{{ url_for('main.wrong_list') }}" data-key="Enter" data-testid="primary">오답 목록으로</a>
-    {% elif view.next_day %}
+    {% elif show_next %}
       <form method="post" action="{{ url_for('main.study_day', day_no=view.next_day) }}">
-        <button class="button button-primary button-wide" data-key="Enter" data-testid="primary">{{ view.next_day }}일차 학습</button>
+        <button class="button button-primary button-wide" data-key="Enter" data-testid="primary">다음 추천: {{ view.next_day }}일차 학습</button>
       </form>
     {% endif %}
   </div>

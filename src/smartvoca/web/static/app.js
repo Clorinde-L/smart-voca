@@ -7,6 +7,8 @@
 //   data-confirm="..."           : 폼을 보내기 전에 확인 대화상자를 띄운다 (DL-03)
 //   data-autosubmit              : 안의 입력이 바뀌면 바로 폼을 보낸다 (체크 상자, 파일 고르기)
 //   data-reveal                  : 가린 뜻을 연다 (UD-04)
+//   data-speak="word"            : 누르면 그 단어를 읽어 준다 (ADR-24)
+//   data-theme-toggle            : 누를 때마다 테마를 자동 → 밝게 → 어둡게로 바꾼다 (ADR-23)
 "use strict";
 
 const AUTO_ADVANCE_MS = 300; // 고른 보기를 눈으로 확인할 틈 (UD-05)
@@ -14,6 +16,8 @@ const AUTO_ADVANCE_MS = 300; // 고른 보기를 눈으로 확인할 틈 (UD-05)
 // ── 단축키 ────────────────────────────────────────────────
 function keyName(event) {
   if (event.key === " ") return "Space";
+  // 글자 키는 자판 위치(code)로 판정한다. 한글 입력 상태에서는 key 가 "ㅔ" 처럼 들어와 "p" 와 맞지 않는다
+  if (/^Key[A-Z]$/.test(event.code)) return event.code.slice(3).toLowerCase();
   return event.key;
 }
 
@@ -31,7 +35,7 @@ document.addEventListener("keydown", (event) => {
 
   // Ctrl+F: 단어 목록 화면에서는 브라우저 찾기 대신 검색창으로 간다
   const search = document.querySelector("[data-search]");
-  if (event.ctrlKey && event.key.toLowerCase() === "f" && search) {
+  if (event.ctrlKey && keyName(event) === "f" && search) {
     event.preventDefault();
     search.focus();
     search.select();
@@ -115,3 +119,70 @@ for (const button of document.querySelectorAll("[data-reveal]")) {
     button.remove(); // 이미 열었으니 Space 는 더 할 일이 없다
   });
 }
+
+// ── 테마 (ADR-23) ─────────────────────────────────────────
+// 선택은 이 브라우저에만 기억한다(localStorage). 학습 기록이 아니라 보기 설정이기 때문이다.
+const THEMES = ["auto", "light", "dark"];
+const THEME_LABELS = { auto: "자동", light: "밝게", dark: "어둡게" };
+
+function currentTheme() {
+  return document.documentElement.dataset.theme || "auto";
+}
+
+function applyTheme(theme) {
+  if (theme === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  try {
+    if (theme === "auto") localStorage.removeItem("smartvoca-theme");
+    else localStorage.setItem("smartvoca-theme", theme);
+  } catch (error) {
+    // 저장을 못 해도 지금 화면에는 적용된다
+  }
+  for (const label of document.querySelectorAll("[data-theme-label]")) label.textContent = THEME_LABELS[theme];
+}
+
+for (const button of document.querySelectorAll("[data-theme-toggle]")) {
+  applyTheme(currentTheme()); // 버튼 글자를 지금 테마에 맞춘다
+  button.addEventListener("click", () => {
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    applyTheme(next);
+  });
+}
+
+// ── 발음 듣기 (ADR-24) ─────────────────────────────────────
+// 브라우저에 내장된 음성 합성을 쓴다. 내 PC 에 설치된 영어 음성(localService)을 먼저 골라 인터넷 없이 읽는다.
+function pickEnglishVoice() {
+  const english = window.speechSynthesis.getVoices().filter((voice) => /^en([-_]|$)/i.test(voice.lang));
+  return (
+    english.find((voice) => voice.localService && /en[-_]US/i.test(voice.lang)) ||
+    english.find((voice) => voice.localService) ||
+    english[0] ||
+    null
+  );
+}
+
+function speak(text, button) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel(); // 읽던 것이 있으면 멈추고 새로 읽는다
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 0.9;
+  const voice = pickEnglishVoice();
+  if (voice) utterance.voice = voice;
+  if (button) {
+    button.classList.add("is-speaking");
+    utterance.onend = utterance.onerror = () => button.classList.remove("is-speaking");
+  }
+  window.speechSynthesis.speak(utterance);
+}
+
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.getVoices(); // 음성 목록은 처음 부를 때 늦게 채워지므로 미리 한 번 부른다
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-speak]");
+  if (!button) return;
+  event.preventDefault();
+  speak(button.dataset.speak, button);
+});

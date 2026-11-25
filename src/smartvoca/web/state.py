@@ -22,8 +22,9 @@ from ..core.models import Exam, ExamResult, StartupNotice, Word, WrongEntry, Wro
 
 # ── 카드 (S-02) ─────────────────────────────────────────────
 class CardMode(Enum):
+    # 2026-11-25 복습(REVIEW) 모드는 일차 학습으로 합쳤다 (ADR-22).
+    # 끝낸 일차를 다시 학습해도 기록은 바뀌지 않으므로 복습과 같다.
     DAY = "day"        # 일차 학습: 모두 보면 '시험 보기'가 켜진다
-    REVIEW = "review"  # 복습: 하단 버튼 없음, 기록을 바꾸지 않는다 (FR-21)
     WRONG = "wrong"    # 오답 학습: 모두 보면 '오답 시험'이 켜진다
 
 
@@ -34,7 +35,7 @@ class CardStudy:
     mode: CardMode
     title: str
     deck: CardDeck
-    day_no: int | None = None                      # 일차 학습·복습의 일차. 오답 학습이면 None
+    day_no: int | None = None                      # 일차 학습의 일차. 오답 학습이면 None
     wrong_info: Mapping[str, WrongEntry] = field(default_factory=dict)
     unlocked: bool = False                         # 시험 버튼이 켜졌는가 (모두 봤거나 이미 암기 완료)
 
@@ -50,11 +51,6 @@ class CardStudy:
     ) -> CardStudy:
         """항상 첫 카드부터 시작한다 (요구사항 명세서 D-03)."""
         return cls(mode, title, CardDeck(words), day_no, wrong_info or {}, already_done)
-
-    @property
-    def has_action(self) -> bool:
-        """하단에 시험 버튼이 있는 모드인가. 복습에는 없다 (FR-21)."""
-        return self.mode is not CardMode.REVIEW
 
     def unlock_if_seen_all(self) -> bool:
         """카드를 모두 본 '그 순간'에만 True 를 돌려준다.
@@ -142,7 +138,8 @@ class ResultView:
     result: ExamResult
     wrong_note: str                       # 틀린 단어 표 제목 뒤에 붙는 설명
     graduated: tuple[str, ...] = ()       # 오답 시험에서 이번에 목록에서 빠진 단어
-    next_day: int | None = None           # 일차 시험 뒤 바로 학습할 다음 일차
+    next_day: int | None = None           # 일차 시험 뒤 추천하는 일차 (안 끝낸 가장 앞 일차)
+    day_no: int | None = None             # 일차 시험이면 그 일차
     is_wrong_exam: bool = False
 
     @property

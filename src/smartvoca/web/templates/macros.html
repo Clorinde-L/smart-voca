@@ -1,12 +1,12 @@
-{#- 2026-11-25 - smart-voca - 여러 화면이 함께 쓰는 조각: 머리줄, 단축키 안내 줄
+{#- 2026-11-25 - smart-voca - 여러 화면이 함께 쓰는 조각: 머리줄, 단축키 안내 줄, 상태 표시, 발음 버튼
     파일 위치: src/smartvoca/web/templates/macros.html -#}
 
-{#- 머리줄: 왼쪽 '← 뒤로', 가운데 제목, 오른쪽 알약 모양 정보 (UI/UX 설계서 §10) -#}
-{% macro page_header(title, back_url=None, info=None, back_key=True) %}
+{#- 머리줄: 왼쪽 '← 뒤로', 가운데 제목, 오른쪽 알약 모양 정보 -#}
+{% macro page_header(title, back_url=None, info=None, back_key=True, back_label="← 뒤로") %}
   <header class="page-header">
     <div class="header-side">
       {% if back_url %}
-        <a class="button button-ghost" href="{{ back_url }}" {% if back_key %}data-key="Escape"{% endif %}>← 뒤로</a>
+        <a class="button button-ghost" href="{{ back_url }}" {% if back_key %}data-key="Escape"{% endif %}>{{ back_label }}</a>
       {% endif %}
     </div>
     <h1 class="page-title">{{ title }}</h1>
@@ -16,7 +16,15 @@
   </header>
 {% endmacro %}
 
-{#- 단축키 안내 줄 (KeyHints). items: [(키, 설명), ...] -#}
+{#- 메뉴로 들어가는 화면의 제목줄 (뒤로 없음: 메뉴 막대로 이동한다) -#}
+{% macro page_heading(title, info=None) %}
+  <header class="page-heading">
+    <h1>{{ title }}</h1>
+    {% if info %}<span class="pill" data-testid="info">{{ info }}</span>{% endif %}
+  </header>
+{% endmacro %}
+
+{#- 단축키 안내 줄. items: [(키, 설명), ...] -#}
 {% macro key_hints(items) %}
   <p class="key-hints">
     {% for key, text in items %}
@@ -27,3 +35,14 @@
     {% endfor %}
   </p>
 {% endmacro %}
+
+{#- 일차 상태 표시. 글자와 색을 함께 쓴다 (§7.6) -#}
+{% macro status_badge(status, testid=None) -%}
+  <span class="status status-{{ status.name | lower }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>{{ status.value }}</span>
+{%- endmacro %}
+
+{#- 발음 버튼 (ADR-24). key 를 주면 그 키로도 누를 수 있다 -#}
+{% macro speak_button(word, large=False, key=None) -%}
+  <button type="button" class="speak{% if large %} speak-large{% endif %}" data-speak="{{ word }}"
+          {% if key %}data-key="{{ key }}"{% endif %} aria-label="{{ word }} 발음 듣기" title="발음 듣기{% if key %} ({{ key | upper }}){% endif %}">🔊</button>
+{%- endmacro %}

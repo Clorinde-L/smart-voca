@@ -1,41 +1,35 @@
-{#- 2026-11-25 - smart-voca - S-05 지난 일차: 복습과 재시험의 진입점 (ADR-11)
+{#- 2026-11-25 - smart-voca - S-05 일차 목록: 전체 일차를 격자로, 상태로 거르기 (ADR-22)
     파일 위치: src/smartvoca/web/templates/day_list.html -#}
 {% extends "base.html" %}
-{% from "macros.html" import page_header, key_hints %}
+{% from "macros.html" import page_heading, status_badge %}
 
-{% block header %}{{ page_header("지난 일차", url_for('main.home')) }}{% endblock %}
+{% block title %}일차 목록 · 스마트 보카{% endblock %}
+{% block header %}{{ page_heading("일차 목록", counts["all"] ~ "일차") }}{% endblock %}
 
 {% block content %}
-  <p class="muted">일차마다 카드로 복습하거나 시험을 다시 볼 수 있습니다.</p>
-  {% if rows %}
-    <div class="table-wrap">
-      <table class="table" data-testid="day-table">
-        <thead><tr><th>일차</th><th>단어</th><th>상태</th><th class="end">학습</th></tr></thead>
-        <tbody>
-          {% for row in rows %}
-            <tr>
-              <td class="strong">{{ row.day_no }}일차</td>
-              <td>{{ row.range }}</td>
-              {#- 상태는 글자와 색을 함께 쓴다: 완료는 초록, 암기만 마친 일차는 주황 (§7.6) -#}
-              <td class="strong {{ 'success' if row.status == DayStatus.DONE else 'warning' }}">{{ row.status.value }}</td>
-              <td class="end">
-                <div class="row row-end tight">
-                  <form method="post" action="{{ url_for('main.exam_day', day_no=row.day_no) }}">
-                    <button class="button button-small">시험 보기</button>
-                  </form>
-                  <form method="post" action="{{ url_for('main.study_review', day_no=row.day_no) }}">
-                    <button class="button button-primary button-small">카드로 복습</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <p class="muted">원하는 일차를 골라 단어를 보고 학습하거나 시험을 볼 수 있습니다. 순서대로 하지 않아도 됩니다.</p>
+  <nav class="tabs" aria-label="상태로 거르기">
+    {% for key, label, _ in filters %}
+      <a class="tab{% if show == key %} is-active{% endif %}" href="{{ url_for('main.days', show=key) if key != 'all' else url_for('main.days') }}"
+         {% if show == key %}aria-current="page"{% endif %} data-testid="tab-{{ key }}">{{ label }}<span class="tab-count">{{ counts[key] }}</span></a>
+    {% endfor %}
+  </nav>
+
+  {% if cards %}
+    <div class="day-grid" data-testid="day-grid">
+      {% for card in cards %}
+        <a class="day-card status-{{ card.status.name | lower }}{% if card.is_current %} is-current{% endif %}"
+           href="{{ url_for('main.day_detail', day_no=card.day_no) }}" data-testid="day-{{ card.day_no }}">
+          <span class="day-card-top">
+            <span class="day-card-title">{{ card.day_no }}일차</span>
+            {{ status_badge(card.status) }}
+          </span>
+          <span class="day-card-range">{{ card.first }} ~ {{ card.last }}</span>
+          <span class="muted">{{ card.count }}단어{% if card.is_current %} · <span class="current-tag">오늘의 학습</span>{% endif %}</span>
+        </a>
+      {% endfor %}
     </div>
   {% else %}
-    <p class="empty">아직 학습한 일차가 없습니다.</p>
+    <p class="empty" data-testid="empty">이 상태인 일차가 없습니다.</p>
   {% endif %}
 {% endblock %}
-
-{% block keyhints %}{{ key_hints([("Esc", "뒤로")]) }}{% endblock %}

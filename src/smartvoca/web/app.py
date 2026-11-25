@@ -76,8 +76,38 @@ def create_app(session: AppSession, secret_key: str | None = None) -> Flask:
         session, WebState(startup_notices=list(session.startup_notices))
     )
     app.register_blueprint(bp)
-    app.context_processor(lambda: {"GRADUATE_STREAK": GRADUATE_STREAK, "DayStatus": DayStatus})
+    app.context_processor(_template_globals)
     return app
+
+
+# 메뉴 막대의 항목: (이름, 엔드포인트, 이 항목을 켜 둘 화면들)
+NAV_ITEMS = (
+    ("홈", "main.home", {"main.home"}),
+    ("일차", "main.days", {"main.days", "main.day_detail", "main.cards"}),
+    ("오답 학습", "main.wrong_list", {"main.wrong_list"}),
+    ("단어 목록", "main.wordbook", {"main.wordbook", "main.import_wordbook"}),
+)
+
+
+def _nav_endpoint() -> str | None:
+    """메뉴에서 켤 항목을 고를 때 쓰는 엔드포인트. 오답 카드 학습은 '오답 학습'에 속한다."""
+    endpoint = request.endpoint
+    if endpoint == "main.cards":
+        study = _state().cards
+        if study is not None and study.mode is CardMode.WRONG:
+            return "main.wrong_list"
+    return endpoint
+
+
+def _template_globals() -> dict:
+    """모든 템플릿이 쓰는 값. 메뉴 막대의 오답 수는 화면마다 세션에서 새로 읽는다."""
+    return {
+        "GRADUATE_STREAK": GRADUATE_STREAK,
+        "DayStatus": DayStatus,
+        "nav_items": NAV_ITEMS,
+        "nav_endpoint": _nav_endpoint(),
+        "nav_wrong_count": _session().summary().wrong_list_size,
+    }
 
 
 def _session() -> AppSession:
@@ -139,17 +169,19 @@ def home():
             "count": day.end - day.start,
             "memorized": session.day_status(summary.current_day) is DayStatus.MEMORIZED,
         }
+    statuses = [(day.day_no, session.day_status(day.day_no)) for day in session.days]
     learned_words = sum(
         day.end - day.start
-        for day in session.days
-        if session.day_status(day.day_no) is DayStatus.DONE
+        for day, (_, status) in zip(session.days, statuses)
+        if status is DayStatus.DONE
     )
     return render_template(
         "home.html",
         summary=summary,
         today=today,
         learned_words=learned_words,
-        has_past_days=bool(session.reviewable_days()),
+        day_map=statuses,  # '일차 한눈에': 전체 일차를 작은 칸으로
+        memorized_days=sum(status is DayStatus.MEMORIZED for _, status in statuses),
         wordbook_label=_wordbook_label(session),
     )
 
@@ -174,10 +206,11 @@ def study_day(day_no: int):
 
 
 def _start_day_cards(day_no: int):
+    """어느 일차든 학습할 수 있다 (ADR-21). 이미 끝낸 일차를 다시 보면 복습이다 — 기록은 바뀌지 않는다."""
     session = _session()
-    if not 1 <= day_no <= len(session.days) or session.day_status(day_no) is DayStatus.LOCKED:
-        flash(f"{day_no}일차는 아직 열리지 않았습니다.", "error")
-        return redirect(url_for("main.home"))
+    if not _day_exists(day_no):
+        flash(f"{day_no}일차는 없습니다.", "error")
+        return redirect(url_for("main.days"))
     already_memorized = session.day_status(day_no) is not DayStatus.AVAILABLE
     study = CardStudy.start(
         CardMode.DAY, f"{day_no}일차 학습", session.day_words(day_no), day_no, already_memorized
@@ -185,16 +218,8 @@ def _start_day_cards(day_no: int):
     return _open_cards(study)
 
 
-@bp.post("/study/review/<int:day_no>")
-def study_review(day_no: int):
-    session = _session()
-    if day_no not in session.reviewable_days():
-        flash(f"{day_no}일차는 아직 복습할 수 없습니다.", "error")
-        return redirect(url_for("main.days"))
-    study = CardStudy.start(
-        CardMode.REVIEW, f"{day_no}일차 복습", session.day_words(day_no), day_no
-    )
-    return _open_cards(study)
+def _day_exists(day_no: int) -> bool:
+    return 1 <= day_no <= len(_session().days)
 
 
 @bp.post("/study/wrong")
@@ -231,10 +256,10 @@ def cards():
     study = _state().cards
     if study is None:
         return redirect(url_for("main.home"))
-    back_url = {
-        CardMode.REVIEW: url_for("main.days"),
-        CardMode.WRONG: url_for("main.wrong_list"),
-    }.get(study.mode, url_for("main.home"))
+    if study.mode is CardMode.WRONG:
+        back_url = url_for("main.wrong_list")
+    else:
+        back_url = url_for("main.day_detail", day_no=study.day_no)
     return render_template(
         "cards.html",
         study=study,
@@ -276,7 +301,7 @@ def cards_hide():
 def cards_action():
     """시험 보기 / 오답 시험. 카드를 모두 봐야 켜진다 (FR-12, FR-24)."""
     study = _state().cards
-    if study is None or not study.has_action or not study.unlocked:
+    if study is None or not study.unlocked:
         return redirect(url_for("main.cards") if study else url_for("main.home"))
     if study.mode is CardMode.DAY:
         return _start_day_exam(study.day_no, url_for("main.cards"))
@@ -286,8 +311,10 @@ def cards_action():
 # ── S-03 시험 응시 ──────────────────────────────────────────
 @bp.post("/exam/day/<int:day_no>")
 def exam_day(day_no: int):
-    """지난 일차 화면의 '시험' 버튼 (FR-13, FR-19)."""
-    return _start_day_exam(day_no, url_for("main.days"))
+    """일차 상세 화면의 '시험 보기' 버튼 (FR-13, FR-19)."""
+    if not _day_exists(day_no):
+        abort(404)
+    return _start_day_exam(day_no, url_for("main.day_detail", day_no=day_no))
 
 
 def _start_day_exam(day_no: int, return_url: str):
@@ -396,19 +423,21 @@ def _submit_day_exam(session: AppSession, run: ExamRun) -> ResultView:
     day_no = run.day_no
     is_retest = session.day_status(day_no) is DayStatus.DONE
     result = session.submit_day_exam(day_no, run.exam, run.answers)
-    next_day = day_no + 1 if day_no < len(session.days) else None
+    # 잠금이 없으므로 '다음 일차'는 N+1 이 아니라 안 끝낸 가장 앞 일차(오늘의 학습 추천)다 (ADR-21)
+    next_day = session.summary().current_day
     if is_retest:
         status = f"{day_no}일차 재시험"
     elif next_day is None:
         status = "모든 일차를 완료했습니다"
     else:
-        status = f"{day_no}일차 완료 · {next_day}일차가 열렸습니다"
+        status = f"{day_no}일차 완료 · 다음 추천은 {next_day}일차입니다"
     return ResultView(
         title=f"{day_no}일차 시험 결과",
         status=status,
         result=result,
         wrong_note="오답 목록에 추가되었습니다",
-        next_day=None if is_retest else next_day,
+        next_day=next_day,
+        day_no=day_no,
     )
 
 
@@ -428,21 +457,67 @@ def result():
     )
 
 
-# ── S-05 지난 일차 ──────────────────────────────────────────
+# ── S-05 일차 목록 · S-08 일차 상세 ─────────────────────────
+# 거르기 탭: (쿼리 값, 이름, 남길 상태들). None 은 전체
+DAY_FILTERS = (
+    ("all", "전체", None),
+    ("todo", "학습 전", {DayStatus.AVAILABLE}),
+    ("memorized", "시험 남음", {DayStatus.MEMORIZED}),
+    ("done", "완료", {DayStatus.DONE}),
+)
+
+
 @bp.get("/days")
 def days():
+    """전체 일차를 격자로 보여 준다. 골라서 상세로 들어간다 (ADR-22)."""
     session = _session()
-    rows = []
-    for day_no in session.reviewable_days():
-        words = session.day_words(day_no)
-        rows.append(
+    show = request.args.get("show", "all")
+    wanted = dict((key, statuses) for key, _, statuses in DAY_FILTERS).get(show)
+    if show not in {key for key, _, _ in DAY_FILTERS}:
+        show = "all"
+    cards, counts = [], {key: 0 for key, _, _ in DAY_FILTERS}
+    current = session.summary().current_day
+    for day in session.days:
+        status = session.day_status(day.day_no)
+        for key, _, statuses in DAY_FILTERS:
+            if statuses is None or status in statuses:
+                counts[key] += 1
+        if wanted is not None and status not in wanted:
+            continue
+        words = session.words[day.start : day.end]
+        cards.append(
             {
-                "day_no": day_no,
-                "range": f"{words[0].word} ~ {words[-1].word}",
-                "status": session.day_status(day_no),
+                "day_no": day.day_no,
+                "first": words[0].word,
+                "last": words[-1].word,
+                "count": len(words),
+                "status": status,
+                "is_current": day.day_no == current,
             }
         )
-    return render_template("day_list.html", rows=rows)
+    return render_template(
+        "day_list.html", cards=cards, show=show, filters=DAY_FILTERS, counts=counts
+    )
+
+
+@bp.get("/days/<int:day_no>")
+def day_detail(day_no: int):
+    """한 일차의 단어를 먼저 훑어보고 학습·시험을 고른다."""
+    session = _session()
+    if not _day_exists(day_no):
+        abort(404)
+    status = session.day_status(day_no)
+    wrong_words = {entry.word for entry in session.wrong_list()}
+    return render_template(
+        "day_detail.html",
+        day_no=day_no,
+        total_days=len(session.days),
+        status=status,
+        words=session.day_words(day_no),
+        wrong_words=wrong_words,
+        can_exam=status is not DayStatus.AVAILABLE,
+        is_current=day_no == session.summary().current_day,
+    )
 
 
 # ── S-06 오답 목록 ──────────────────────────────────────────

@@ -144,9 +144,9 @@ def test_메인_화면이_처음_상태를_보여_준다(client):
     assert home.texts["today"] == "1일차"
     assert home.texts["start"] == "1일차 학습 시작"
     assert home.texts["progress"] == f"0 / {DEFAULT_DAY_COUNT} 일차 완료"
-    assert "아직 학습한 일차가 없습니다" in home.texts["menu-days"]
-    assert home.attrs["menu-days"].get("aria-disabled") == "true"
-    assert "오답 학습 (0)" in home.texts["menu-wrong"]
+    assert home.texts["nav-wrong_list"] == "오답 학습"            # 오답이 없으면 숫자를 붙이지 않는다
+    assert "is-active" in home.attrs["nav-home"]["class"]
+    assert home.texts["day-map"].split() == [str(d) for d in range(1, DEFAULT_DAY_COUNT + 1)]  # 일차 한눈에
     assert f"기본 토익 {DEFAULT_WORD_COUNT:,} 단어" in home.texts["wordbook-label"]
 
 
@@ -166,7 +166,7 @@ def test_하루_학습_흐름(client, ctx):
     client.post("/cards/next")
     cards = page(client.get("/cards"))
     assert not disabled(cards, "action")                     # 20장째를 보는 순간 켜진다
-    assert cards.texts["hint"] == "암기 완료! 시험을 볼 수 있습니다"
+    assert cards.texts["hint"] == "시험을 볼 수 있습니다"
     assert ctx.session.day_status(1) is DayStatus.MEMORIZED
 
     assert client.post("/cards/action").headers["Location"] == "/exam"
@@ -187,15 +187,15 @@ def test_하루_학습_흐름(client, ctx):
     assert client.post("/exam/submit").headers["Location"] == "/result"
     result = page(client.get("/result"))
     assert result.texts["score"] == "17 / 20"
-    assert result.texts["status"] == "1일차 완료 · 2일차가 열렸습니다"
+    assert result.texts["status"] == "1일차 완료 · 다음 추천은 2일차입니다"
     assert {row[0] for row in result.rows["wrong-table"]} == wrong_words
-    assert result.texts["primary"] == "2일차 학습"
+    assert result.texts["primary"] == "다음 추천: 2일차 학습"
 
     home = page(client.get("/"))
     assert home.texts["today"] == "2일차"
     assert home.texts["progress"] == f"1 / {DEFAULT_DAY_COUNT} 일차 완료"
-    assert "오답 학습 (3)" in home.texts["menu-wrong"]
-    assert home.attrs["menu-days"].get("href") == "/days"
+    assert home.texts["nav-wrong_list"] == "오답 학습3"             # 메뉴 막대에 오답 수
+    assert "status-done" in client.get("/").get_data(as_text=True)
 
 
 def test_답하지_않은_문제가_있으면_제출할_수_없다(client, ctx):
@@ -238,38 +238,101 @@ def test_제출한_시험은_다시_제출되지_않는다(client, ctx):
     assert ctx.session.wrong_list() == before
 
 
-def test_지난_일차에서_복습과_재시험을_한다(client, ctx):
-    finish_day(client, ctx)
+def test_일차_목록에서_아무_일차나_골라_학습한다(client, ctx):
+    """잠금 없음 (ADR-21): 1일차를 안 끝내도 30일차를 학습하고 시험 볼 수 있다."""
     days = page(client.get("/days"))
-    assert len(days.rows["day-table"]) == 1
-    day_row = days.rows["day-table"][0]
-    assert (day_row[0], day_row[2]) == ("1일차", "완료")
+    assert days.texts["info"] == f"{DEFAULT_DAY_COUNT}일차"
+    assert days.texts["day-30"].startswith("30일차 학습 전")
+    assert "is-current" in days.attrs["day-1"]["class"]          # 오늘의 학습 표시
 
-    client.post("/study/review/1")
-    cards = page(client.get("/cards"))
-    assert "1일차 복습" in client.get("/cards").get_data(as_text=True)
-    assert "action" not in cards.attrs           # 복습에는 시험 버튼이 없다
+    detail = page(client.get("/days/30"))
+    assert len(detail.rows["word-table"]) == 20
+    assert detail.rows["word-table"][0][0] == "581"               # 단어 순번 (1 부터)
+    assert detail.texts["status"] == "학습 전"
+    assert disabled(detail, "exam")                               # 카드를 다 봐야 시험
+
+    client.post("/study/day/30")
+    assert ctx.state.cards.day_no == 30
+    assert 'href="/days/30"' in client.get("/cards").get_data(as_text=True)  # 뒤로 → 일차 상세
+    view_all_cards(client, ctx)
+    assert ctx.session.day_status(30) is DayStatus.MEMORIZED
+    assert not disabled(page(client.get("/days/30")), "exam")
+
+    assert client.post("/exam/day/30").headers["Location"] == "/exam"
+    answer_all(client, ctx)
+    client.post("/exam/submit")
+    result = page(client.get("/result"))
+    assert result.texts["status"] == "30일차 완료 · 다음 추천은 1일차입니다"
+    assert result.texts["primary"] == "다음 추천: 1일차 학습"
+    assert ctx.session.summary().current_day == 1                 # 오늘의 학습은 그대로 1일차
+
+    done = page(client.get("/days", query_string={"show": "done"}))
+    assert done.texts["tab-done"] == "완료1"
+    assert "day-30" in done.attrs and "day-1" not in done.attrs
+
+
+def test_끝낸_일차를_다시_학습하고_재시험한다(client, ctx):
+    finish_day(client, ctx)
+    detail = page(client.get("/days/1"))
+    assert detail.texts["status"] == "완료"
+    assert detail.texts["study"] == "다시 학습" and detail.texts["exam"] == "재시험"
+
+    client.post("/study/day/1")
+    assert not disabled(page(client.get("/cards")), "action")    # 이미 암기했으니 바로 시험 가능
     before = ctx.session.summary()
     view_all_cards(client, ctx)
-    assert ctx.session.summary() == before       # 복습은 기록을 바꾸지 않는다
-    assert 'href="/days"' in client.get("/cards").get_data(as_text=True)  # 뒤로 → 지난 일차
+    assert ctx.session.summary() == before                       # 다시 학습은 기록을 바꾸지 않는다
 
-    assert client.post("/exam/day/1").headers["Location"] == "/exam"
+    client.post("/exam/day/1")
     answer_all(client, ctx, wrong_positions={3})
     client.post("/exam/submit")
     result = page(client.get("/result"))
     assert result.texts["status"] == "1일차 재시험"
-    assert "primary" not in result.texts
     assert ctx.session.summary().wrong_list_size == 1
     assert ctx.session.summary().current_day == 2
+    assert "오답" in page(client.get("/days/1")).texts["word-table"]  # 틀린 단어에 오답 표시
 
 
-def test_잠긴_일차는_열_수_없다(client, ctx):
-    response = client.post("/study/day/5", follow_redirects=True)
-    assert "5일차는 아직 열리지 않았습니다" in response.get_data(as_text=True)
+def test_없는_일차와_암기_전_시험은_막는다(client, ctx):
+    assert client.get("/days/999").status_code == 404
+    response = client.post("/study/day/999", follow_redirects=True)
+    assert "999일차는 없습니다" in response.get_data(as_text=True)
     assert ctx.state.cards is None
-    assert client.post("/exam/day/1").headers["Location"] == "/days"
+    assert client.post("/exam/day/1").headers["Location"] == "/days/1"   # 암기 전이라 시험 불가
     assert ctx.state.exam is None
+
+
+def test_일차_상세에서_이웃_일차로_간다(client):
+    first = page(client.get("/days/1"))
+    assert "prev-day" not in first.attrs and first.attrs["next-day"]["href"] == "/days/2"
+    last = page(client.get(f"/days/{DEFAULT_DAY_COUNT}"))
+    assert "next-day" not in last.attrs
+    assert len(last.rows["word-table"]) == DEFAULT_WORD_COUNT - (DEFAULT_DAY_COUNT - 1) * 20
+
+
+def test_시험_화면에는_메뉴_막대가_없다(client, ctx):
+    client.post("/study/today")
+    assert "nav-home" in page(client.get("/cards")).attrs
+    view_all_cards(client, ctx)
+    client.post("/cards/action")
+    assert "nav-home" not in page(client.get("/exam")).attrs
+
+
+def test_오답_카드_학습_중에는_메뉴의_오답_학습이_켜진다(client, ctx):
+    finish_day(client, ctx, wrong_positions={0})
+    client.post("/study/wrong")
+    cards = page(client.get("/cards"))
+    assert "is-active" in cards.attrs["nav-wrong_list"]["class"]
+    assert "is-active" not in cards.attrs["nav-days"]["class"]
+
+
+def test_발음_버튼과_테마_버튼이_있다(client, ctx):
+    client.post("/study/today")
+    cards = client.get("/cards").get_data(as_text=True)
+    assert f'data-speak="{ctx.state.cards.deck.current.word}"' in cards and 'data-key="p"' in cards
+    assert cards.count("data-speak=") == 1
+    assert client.get("/days/1").get_data(as_text=True).count("data-speak=") == 20
+    assert "data-theme-toggle" in client.get("/").get_data(as_text=True)
 
 
 def test_오답_정리_흐름(client, ctx):
@@ -333,7 +396,7 @@ def test_단어장을_불러오면_확인을_거쳐_교체된다(client, ctx):
     home = page(client.get("/"))
     assert home.texts["today"] == "1일차"
     assert home.texts["progress"] == "0 / 3 일차 완료"
-    assert "오답 학습 (0)" in home.texts["menu-wrong"]
+    assert home.texts["nav-wrong_list"] == "오답 학습"
     assert "사용자 단어장 45 단어" in home.texts["wordbook-label"]
 
 
@@ -392,7 +455,7 @@ def test_시험과_카드에_단축키_안내가_있다(client, ctx):
 def test_가장_긴_뜻도_자르지_않고_보낸다(client, ctx):
     """NFR-07: 뜻을 줄이지 않고 그대로 보낸다. 줄바꿈은 CSS(overflow-wrap)가 맡는다."""
     longest = max(ctx.session.words, key=lambda word: len(word.meaning))
-    ctx.state.cards = CardStudy.start(CardMode.REVIEW, "긴 뜻", [longest], day_no=1)
+    ctx.state.cards = CardStudy.start(CardMode.DAY, "긴 뜻", [longest], day_no=1, already_done=True)
     assert page(client.get("/cards")).texts["meaning"] == longest.meaning
 
 
@@ -420,7 +483,7 @@ def test_검색_결과가_없으면_안내하고_Esc는_검색어를_먼저_지�
     assert empty.texts["empty"] == "검색 결과가 없습니다"
     assert html.count('data-key="Escape"') == 1 and "검색 지우기</a>" in html  # Esc → 검색 지우기
     plain = client.get("/wordbook").get_data(as_text=True)
-    assert plain.count('data-key="Escape"') == 1 and "← 뒤로" in plain        # Esc → 뒤로
+    assert plain.count('data-key="Escape"') == 0                             # 검색어가 없으면 Esc 할 일 없음
 
 
 # ── 시작 알림 · 보안 ────────────────────────────────────────

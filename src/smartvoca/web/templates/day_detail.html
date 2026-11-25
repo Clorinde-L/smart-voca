@@ -1,0 +1,78 @@
+{#- 2026-11-25 - smart-voca - S-08 일차 상세: 단어를 먼저 훑어보고 학습·시험을 고른다 (ADR-22)
+    파일 위치: src/smartvoca/web/templates/day_detail.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header, key_hints, status_badge, speak_button %}
+
+{% block title %}{{ day_no }}일차 · 스마트 보카{% endblock %}
+
+{% block header %}
+  <header class="page-header">
+    <div class="header-side">
+      <a class="button button-ghost" href="{{ url_for('main.days') }}" data-key="Escape">← 일차 목록</a>
+    </div>
+    <h1 class="page-title">{{ day_no }}일차</h1>
+    <div class="header-side header-side-end">
+      {#- 이웃 일차로 바로 옮겨 간다 -#}
+      {% if day_no > 1 %}
+        <a class="button button-small" href="{{ url_for('main.day_detail', day_no=day_no - 1) }}" data-key="ArrowLeft" data-testid="prev-day">← {{ day_no - 1 }}</a>
+      {% endif %}
+      {% if day_no < total_days %}
+        <a class="button button-small" href="{{ url_for('main.day_detail', day_no=day_no + 1) }}" data-key="ArrowRight" data-testid="next-day">{{ day_no + 1 }} →</a>
+      {% endif %}
+    </div>
+  </header>
+{% endblock %}
+
+{% block content %}
+  <section class="panel detail-summary">
+    <div class="detail-text">
+      <p>{{ status_badge(status, "status") }}{% if is_current %} <span class="current-tag">오늘의 학습</span>{% endif %}</p>
+      <p class="muted" data-testid="exam-hint">
+        {%- if status == DayStatus.AVAILABLE -%}
+          카드 {{ words | length }}장을 모두 보면 시험을 볼 수 있습니다.
+        {%- elif status == DayStatus.MEMORIZED -%}
+          카드를 모두 봤습니다. 시험을 보면 이 일차가 완료됩니다.
+        {%- else -%}
+          완료한 일차입니다. 다시 학습하거나 재시험을 볼 수 있습니다. 기록은 바뀌지 않고, 재시험에서 틀린 단어는 오답 목록에 더해집니다.
+        {%- endif -%}
+      </p>
+    </div>
+    <div class="detail-actions">
+      <form method="post" action="{{ url_for('main.exam_day', day_no=day_no) }}">
+        <button class="button" data-testid="exam" {% if not can_exam %}disabled title="카드를 모두 본 뒤에 볼 수 있습니다"{% endif %}>
+          {{ "재시험" if status == DayStatus.DONE else "시험 보기" }}
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('main.study_day', day_no=day_no) }}">
+        <button class="button button-primary button-wide" data-key="Enter" data-testid="study">
+          {{ "다시 학습" if status == DayStatus.DONE else "카드로 학습" }}
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <div class="table-wrap">
+    <table class="table" data-testid="word-table">
+      <thead><tr><th class="num">#</th><th style="width: 34%">영단어</th><th>뜻</th></tr></thead>
+      <tbody>
+        {% for word in words %}
+          <tr>
+            <td class="num">{{ word.index + 1 }}</td>
+            <td>
+              <span class="word-cell">
+                {{ speak_button(word.word) }}
+                <span class="strong">{{ word.word }}</span>
+                {% if word.word in wrong_words %}<span class="mark-wrong" title="오답 목록에 있는 단어">오답</span>{% endif %}
+              </span>
+            </td>
+            <td>{{ word.meaning }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+
+{% block keyhints %}
+  {{ key_hints([("Enter", "카드로 학습"), ("← →", "이전·다음 일차"), ("Esc", "일차 목록")]) }}
+{% endblock %}

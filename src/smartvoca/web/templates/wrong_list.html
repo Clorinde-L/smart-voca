@@ -1,9 +1,10 @@
 {#- 2026-11-25 - smart-voca - S-06 오답 목록: 틀린 단어 표, 카드 학습·내보내기
     파일 위치: src/smartvoca/web/templates/wrong_list.html -#}
 {% extends "base.html" %}
-{% from "macros.html" import page_header, key_hints %}
+{% from "macros.html" import page_heading, key_hints, speak_button %}
 
-{% block header %}{{ page_header("오답 학습", url_for('main.home'), (rows | length) ~ "개") }}{% endblock %}
+{% block title %}오답 학습 · 스마트 보카{% endblock %}
+{% block header %}{{ page_heading("오답 학습", (rows | length) ~ "개") }}{% endblock %}
 
 {% block content %}
   {% if rows %}
@@ -14,7 +15,7 @@
         <tbody>
           {% for entry, meaning in rows %}
             <tr>
-              <td class="strong">{{ entry.word }}</td>
+              <td><span class="word-cell">{{ speak_button(entry.word) }}<span class="strong">{{ entry.word }}</span></span></td>
               <td>{{ meaning }}</td>
               <td>{{ entry.wrong_count }}</td>
               <td>{{ entry.streak }} / {{ GRADUATE_STREAK }}</td>
@@ -43,4 +44,4 @@
   </div>
 {% endblock %}
 
-{% block keyhints %}{{ key_hints([("Enter", "카드로 학습"), ("Esc", "뒤로")]) }}{% endblock %}
+{% block keyhints %}{% if rows %}{{ key_hints([("Enter", "카드로 학습")]) }}{% endif %}{% endblock %}

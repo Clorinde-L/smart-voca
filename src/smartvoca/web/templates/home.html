@@ -1,21 +1,15 @@
-{#- 2026-11-25 - smart-voca - S-01 메인: 오늘 할 일차, 진도, 학습 현황, 메뉴
-    파일 위치: src/smartvoca/web/templates/home.html -#}
+{#- 2026-11-25 - smart-voca - S-01 메인: 오늘의 학습, 현황, 일차 한눈에
+    파일 위치: src/smartvoca/web/templates/home.html
+    2026-11-25 UI 개편: 메뉴 카드는 메뉴 막대로 옮기고 '일차 한눈에'를 더함 (ADR-22) -#}
 {% extends "base.html" %}
 {% from "macros.html" import key_hints %}
-
-{% block header %}
-  <header class="home-title">
-    <h1>스마트 보카</h1>
-    <span class="muted" data-testid="wordbook-label">단어장: {{ wordbook_label }}</span>
-  </header>
-{% endblock %}
 
 {% block content %}
   {#- 들어오자마자 '오늘 할 일'이 가장 크게 보이게 한다 (UI/UX 설계서 §1.1) -#}
   <section class="hero">
     <div class="hero-top">
       <div>
-        <p class="hero-label">오늘의 학습</p>
+        <p class="hero-label">오늘의 학습 · 안 끝낸 가장 앞 일차</p>
         {% if today %}
           <p class="hero-day" data-testid="today">{{ today.day_no }}일차</p>
           <p class="hero-sub">
@@ -24,15 +18,18 @@
           </p>
         {% else %}
           <p class="hero-day" data-testid="today">모든 일차를 완료했습니다</p>
-          <p class="hero-sub">지난 일차에서 복습하거나 다시 시험을 볼 수 있습니다.</p>
+          <p class="hero-sub">일차 목록에서 아무 일차나 골라 다시 학습하거나 시험을 볼 수 있습니다.</p>
         {% endif %}
       </div>
       {% if today %}
-        <form method="post" action="{{ url_for('main.study_today') }}">
-          <button class="button button-on-primary button-large" data-key="Enter" data-testid="start">
-            {{ today.day_no }}일차 {{ "이어서 하기" if today.memorized else "학습 시작" }}
-          </button>
-        </form>
+        <div class="hero-actions">
+          <a class="hero-link" href="{{ url_for('main.day_detail', day_no=today.day_no) }}">단어 미리보기</a>
+          <form method="post" action="{{ url_for('main.study_today') }}">
+            <button class="button button-on-primary button-large" data-key="Enter" data-testid="start">
+              {{ today.day_no }}일차 {{ "이어서 하기" if today.memorized else "학습 시작" }}
+            </button>
+          </form>
+        </div>
       {% endif %}
     </div>
     <div class="hero-progress">
@@ -43,27 +40,33 @@
 
   <section class="tiles">
     <div class="tile"><p class="tile-label">완료한 일차</p><p class="tile-value">{{ summary.done_days }}일</p></div>
+    <div class="tile"><p class="tile-label">시험이 남은 일차</p><p class="tile-value">{{ memorized_days }}일</p></div>
     <div class="tile"><p class="tile-label">시험까지 마친 단어</p><p class="tile-value">{{ "{:,}".format(learned_words) }}개</p></div>
-    <div class="tile"><p class="tile-label">오답 단어</p><p class="tile-value">{{ "{:,}".format(summary.wrong_list_size) }}개</p></div>
+    <a class="tile" href="{{ url_for('main.wrong_list') }}" data-testid="tile-wrong"><p class="tile-label">오답 단어 →</p><p class="tile-value">{{ "{:,}".format(summary.wrong_list_size) }}개</p></a>
   </section>
 
-  <nav class="menu">
-    {% if has_past_days %}
-      <a class="menu-card" href="{{ url_for('main.days') }}" data-testid="menu-days">
-        <span class="badge">복</span><span><strong>지난 일차</strong><small>복습·재시험</small></span>
-      </a>
-    {% else %}
-      <span class="menu-card is-disabled" aria-disabled="true" data-testid="menu-days">
-        <span class="badge">복</span><span><strong>지난 일차</strong><small>아직 학습한 일차가 없습니다</small></span>
-      </span>
-    {% endif %}
-    <a class="menu-card" href="{{ url_for('main.wrong_list') }}" data-testid="menu-wrong">
-      <span class="badge">오</span><span><strong>오답 학습 ({{ summary.wrong_list_size }})</strong><small>틀린 단어 다시 보기</small></span>
-    </a>
-    <a class="menu-card" href="{{ url_for('main.wordbook') }}" data-testid="menu-wordbook">
-      <span class="badge">단</span><span><strong>단어 목록</strong><small>전체 단어 검색·불러오기</small></span>
-    </a>
-  </nav>
+  <section class="panel">
+    <div class="section-head">
+      <h2 class="section-title">일차 한눈에</h2>
+      <a class="muted" href="{{ url_for('main.days') }}">일차 목록 →</a>
+    </div>
+    <p class="muted">아무 일차나 눌러 단어를 보고 학습할 수 있습니다.</p>
+    <nav class="day-map" aria-label="전체 일차" data-testid="day-map" style="margin-top: 12px">
+      {% for day_no, status in day_map %}
+        <a class="day-cell status-{{ status.name | lower }}{% if today and today.day_no == day_no %} is-current{% endif %}"
+           href="{{ url_for('main.day_detail', day_no=day_no) }}" title="{{ day_no }}일차 · {{ status.value }}"
+           aria-label="{{ day_no }}일차, {{ status.value }}">{{ day_no }}</a>
+      {% endfor %}
+    </nav>
+    <div class="legend" style="margin-top: 12px">
+      <span class="legend-item"><span class="legend-swatch"></span>학습 전</span>
+      <span class="legend-item"><span class="legend-swatch status-memorized"></span>시험 남음</span>
+      <span class="legend-item"><span class="legend-swatch status-done"></span>완료</span>
+      <span class="legend-item"><span class="legend-swatch is-current"></span>오늘의 학습</span>
+    </div>
+  </section>
+
+  <p class="muted center" data-testid="wordbook-label">단어장: {{ wordbook_label }}</p>
 {% endblock %}
 
 {% block keyhints %}

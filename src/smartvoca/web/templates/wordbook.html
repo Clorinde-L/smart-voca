@@ -1,10 +1,10 @@
 {#- 2026-11-25 - smart-voca - S-07 단어 목록: 전체 단어 검색표, 단어장 불러오기·내보내기 (UD-06)
     파일 위치: src/smartvoca/web/templates/wordbook.html -#}
 {% extends "base.html" %}
-{% from "macros.html" import page_header, key_hints %}
+{% from "macros.html" import page_heading, key_hints %}
 
-{#- Esc 는 검색어가 있으면 먼저 지우고, 없으면 뒤로 간다. 그래서 검색어가 있을 땐 '뒤로'에 Esc 를 붙이지 않는다 -#}
-{% block header %}{{ page_header("단어 목록", url_for('main.home'), "{:,} 단어".format(total), back_key=not query) }}{% endblock %}
+{% block title %}단어 목록 · 스마트 보카{% endblock %}
+{% block header %}{{ page_heading("단어 목록", "{:,} 단어".format(total)) }}{% endblock %}
 
 {% block content %}
   {#- 자주 쓰지 않는 파일 작업은 현재 단어장 줄 오른쪽에 작게 둔다 -#}
@@ -41,7 +41,7 @@
         <thead><tr><th>일차</th><th>영단어</th><th>뜻</th></tr></thead>
         <tbody>
           {% for day_no, word in rows %}
-            <tr><td>{{ day_no }}일차</td><td class="strong">{{ word.word }}</td><td class="ellipsis" title="{{ word.meaning }}">{{ word.meaning }}</td></tr>
+            <tr><td><a href="{{ url_for('main.day_detail', day_no=day_no) }}">{{ day_no }}일차</a></td><td class="strong">{{ word.word }}</td><td class="ellipsis" title="{{ word.meaning }}">{{ word.meaning }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -51,4 +51,4 @@
   {% endif %}
 {% endblock %}
 
-{% block keyhints %}{{ key_hints([("Ctrl F", "검색"), ("Esc", "검색 지우기·뒤로")]) }}{% endblock %}
+{% block keyhints %}{{ key_hints([("Ctrl F", "검색"), ("Esc", "검색 지우기")]) }}{% endblock %}
