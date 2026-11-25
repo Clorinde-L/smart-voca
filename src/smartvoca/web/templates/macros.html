@@ -1,0 +1,29 @@
+{#- 2026-11-25 - smart-voca - 여러 화면이 함께 쓰는 조각: 머리줄, 단축키 안내 줄
+    파일 위치: src/smartvoca/web/templates/macros.html -#}
+
+{#- 머리줄: 왼쪽 '← 뒤로', 가운데 제목, 오른쪽 알약 모양 정보 (UI/UX 설계서 §10) -#}
+{% macro page_header(title, back_url=None, info=None, back_key=True) %}
+  <header class="page-header">
+    <div class="header-side">
+      {% if back_url %}
+        <a class="button button-ghost" href="{{ back_url }}" {% if back_key %}data-key="Escape"{% endif %}>← 뒤로</a>
+      {% endif %}
+    </div>
+    <h1 class="page-title">{{ title }}</h1>
+    <div class="header-side header-side-end">
+      {% if info %}<span class="pill" data-testid="info">{{ info }}</span>{% endif %}
+    </div>
+  </header>
+{% endmacro %}
+
+{#- 단축키 안내 줄 (KeyHints). items: [(키, 설명), ...] -#}
+{% macro key_hints(items) %}
+  <p class="key-hints">
+    {% for key, text in items %}
+      <span class="key-hint">
+        {% for cap in key.split(' ') %}<kbd>{{ cap }}</kbd>{% endfor %}
+        {{ text }}
+      </span>
+    {% endfor %}
+  </p>
+{% endmacro %}

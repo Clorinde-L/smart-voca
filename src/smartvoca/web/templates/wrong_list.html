@@ -1,0 +1,46 @@
+{#- 2026-11-25 - smart-voca - S-06 오답 목록: 틀린 단어 표, 카드 학습·내보내기
+    파일 위치: src/smartvoca/web/templates/wrong_list.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header, key_hints %}
+
+{% block header %}{{ page_header("오답 학습", url_for('main.home'), (rows | length) ~ "개") }}{% endblock %}
+
+{% block content %}
+  {% if rows %}
+    {#- 순서는 세션이 준 그대로(오답 횟수 순). 정렬을 바꿀 수 없다 (FR-22) -#}
+    <div class="table-wrap">
+      <table class="table" data-testid="wrong-table">
+        <thead><tr><th>단어</th><th>뜻</th><th>틀린 횟수</th><th>연속 정답</th></tr></thead>
+        <tbody>
+          {% for entry, meaning in rows %}
+            <tr>
+              <td class="strong">{{ entry.word }}</td>
+              <td>{{ meaning }}</td>
+              <td>{{ entry.wrong_count }}</td>
+              <td>{{ entry.streak }} / {{ GRADUATE_STREAK }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {#- 목록에서 빠지는 기준을 화면에 적어 둔다 (현황·환경 분석서 I-03) -#}
+    <p class="muted">오답 시험에서 {{ GRADUATE_STREAK }}번 연속 맞히면 목록에서 빠집니다</p>
+  {% else %}
+    <p class="empty" data-testid="empty">틀린 단어가 없습니다.<br>일차 시험에서 틀린 단어가 여기에 모입니다.</p>
+  {% endif %}
+
+  <div class="row">
+    {% if rows %}
+      <a class="button" href="{{ url_for('main.export_wrong_list') }}" data-testid="export">오답 목록 내보내기</a>
+    {% else %}
+      <button class="button" disabled data-testid="export">오답 목록 내보내기</button>
+    {% endif %}
+    <span class="grow"></span>
+    <form method="post" action="{{ url_for('main.study_wrong') }}">
+      <button class="button button-primary button-wide" data-key="Enter" data-testid="study"
+              {% if not rows %}disabled{% endif %}>카드로 학습</button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block keyhints %}{{ key_hints([("Enter", "카드로 학습"), ("Esc", "뒤로")]) }}{% endblock %}

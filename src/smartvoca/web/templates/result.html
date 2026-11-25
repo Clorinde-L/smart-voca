@@ -1,0 +1,61 @@
+{#- 2026-11-25 - smart-voca - S-04 시험 결과. 이 화면이 뜬 시점에 기록은 이미 저장되어 있다 (FR-26)
+    파일 위치: src/smartvoca/web/templates/result.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header %}
+
+{% block title %}{{ view.title }} · 스마트 보카{% endblock %}
+
+{#- 제출은 되돌릴 수 없으므로 '뒤로'가 없다 -#}
+{% block header %}{{ page_header(view.title) }}{% endblock %}
+
+{% block content %}
+  <section class="panel result-summary">
+    {#- 점수 고리: 둘레 길이만큼 선을 긋고, 맞힌 비율만큼만 보이게 한다. 숫자를 항상 함께 적는다 -#}
+    {% set circumference = 2 * 3.14159265 * 66 %}
+    <svg class="score-ring tone-{{ tone }}" viewBox="0 0 164 164" role="img"
+         aria-label="{{ view.result.total }}문제 중 {{ view.result.correct_count }}개 맞힘">
+      <circle class="ring-track" cx="82" cy="82" r="66"/>
+      <circle class="ring-value" cx="82" cy="82" r="66"
+              stroke-dasharray="{{ circumference }}"
+              stroke-dashoffset="{{ circumference * (1 - ratio) }}"
+              transform="rotate(-90 82 82)"/>
+      <text x="82" y="80" class="ring-score" data-testid="score">{{ view.result.correct_count }} / {{ view.result.total }}</text>
+      <text x="82" y="104" class="ring-percent">정답률 {{ (ratio * 100) | round | int }}%</text>
+    </svg>
+    <div>
+      <p class="result-status" data-testid="status">{{ view.status }}</p>
+      <p class="muted">{{ cheer }}</p>
+      {% if view.graduated %}
+        <p class="success" data-testid="graduated">✓ 목록에서 빠진 단어: {{ view.graduated | join(", ") }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if view.wrong_items %}
+    <h2 class="section-title">틀린 단어 {{ view.wrong_items | length }}개 — {{ view.wrong_note }}</h2>
+    {#- 정답과 고른 답을 색이 아니라 열 제목으로 구분한다 (§7.6) -#}
+    <div class="table-wrap">
+      <table class="table" data-testid="wrong-table">
+        <thead><tr><th>단어</th><th>정답</th><th>내가 고른 답</th></tr></thead>
+        <tbody>
+          {% for item in view.wrong_items %}
+            <tr><td class="strong">{{ item.word }}</td><td>{{ item.correct_meaning }}</td><td>{{ item.chosen_meaning }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty" data-testid="perfect">틀린 단어가 없습니다</p>
+  {% endif %}
+
+  <div class="row row-end">
+    <a class="button" href="{{ url_for('main.home') }}" data-key="Escape{% if not (view.is_wrong_exam or view.next_day) %} Enter{% endif %}">메인으로</a>
+    {% if view.is_wrong_exam %}
+      <a class="button button-primary button-wide" href="{{ url_for('main.wrong_list') }}" data-key="Enter" data-testid="primary">오답 목록으로</a>
+    {% elif view.next_day %}
+      <form method="post" action="{{ url_for('main.study_day', day_no=view.next_day) }}">
+        <button class="button button-primary button-wide" data-key="Enter" data-testid="primary">{{ view.next_day }}일차 학습</button>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{#- 2026-11-25 - smart-voca - DL-01 단어장 교체 확인 / DL-02 단어장 검증 오류
+    파일 위치: src/smartvoca/web/templates/import_confirm.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header %}
+
+{% block header %}{{ page_header("단어장 불러오기", url_for('main.wordbook')) }}{% endblock %}
+
+{% block content %}
+  {% if issues %}
+    {#- DL-02: 무엇이 문제이고 어떻게 고치는지 함께 적는다 (§7.7) -#}
+    <section class="panel">
+      <h2 class="section-title danger">단어장을 불러올 수 없습니다</h2>
+      <p data-testid="issue-summary">"{{ file_name }}" 에서 문제 {{ issue_count }}건을 찾았습니다. 고친 뒤 다시 불러와 주세요.</p>
+      <ul class="issues" data-testid="issues">
+        {% for issue in issues %}
+          <li>{% if issue.line_no is not none %}{{ issue.line_no }}번째 줄: {% endif %}{{ issue.message }}</li>
+        {% endfor %}
+        {% if hidden_issue_count %}<li>… 외 {{ hidden_issue_count }}건</li>{% endif %}
+      </ul>
+      <div class="row row-end">
+        <a class="button button-primary" href="{{ url_for('main.wordbook') }}" autofocus>확인</a>
+      </div>
+    </section>
+  {% else %}
+    {#- DL-01: 기록을 지우는 확인이므로 안전한 쪽(취소)에 초점을 둔다 -#}
+    <section class="panel">
+      <h2 class="section-title">단어장 교체</h2>
+      <p data-testid="confirm-text">단어장을 "{{ file_name }}" ({{ "{:,}".format(word_count) }} 단어, {{ day_count }}일차)로 바꿉니다.</p>
+      <p class="danger">지금까지의 학습 기록(완료 일차 {{ done_days }}개, 오답 단어 {{ wrong_count }}개)이 모두 지워지고 되돌릴 수 없습니다.</p>
+      <p class="muted">오답 단어를 남기려면 먼저 '오답 목록 내보내기'를 하세요.</p>
+      <p>계속할까요?</p>
+      <div class="row row-end">
+        <form method="post" action="{{ url_for('main.import_confirm') }}">
+          <button class="button button-danger">바꾸기</button>
+        </form>
+        <form method="post" action="{{ url_for('main.import_cancel') }}">
+          <button class="button button-primary" autofocus>취소</button>
+        </form>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

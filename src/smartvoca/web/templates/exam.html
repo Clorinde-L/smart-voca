@@ -1,0 +1,90 @@
+{#- 2026-11-25 - smart-voca - S-03 시험 응시: 일차 시험·오답 시험 공용. 정오는 보여 주지 않는다 (ADR-10)
+    파일 위치: src/smartvoca/web/templates/exam.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header, key_hints %}
+
+{% block title %}{{ run.title }} · 스마트 보카{% endblock %}
+
+{% block header %}
+  {#- '뒤로'는 링크가 아니라 그만두기 폼이다. 누르면 DL-03 으로 먼저 묻는다 -#}
+  <header class="page-header">
+    <div class="header-side">
+      <form method="post" action="{{ url_for('main.exam_abort') }}"
+            data-confirm-title="시험 중단"
+            data-confirm="시험을 그만둘까요? 지금까지 고른 답은 저장되지 않고 이 시험은 없던 것이 됩니다."
+            data-confirm-yes="그만두기" data-confirm-no="계속 풀기">
+        <button class="button button-ghost" data-key="Escape">← 뒤로</button>
+      </form>
+    </div>
+    <h1 class="page-title">{{ run.title }}</h1>
+    <div class="header-side header-side-end">
+      <span class="pill" data-testid="info">문제 {{ run.position + 1 }} / {{ run.total }}</span>
+    </div>
+  </header>
+
+  {#- 답한 문제와 현재 문제를 한눈에. 누르면 그 문제로 간다 -#}
+  {% if use_dots %}
+    <form method="post" action="{{ url_for('main.exam_goto') }}" class="dots" aria-label="문제 번호">
+      {% for answer in run.answers %}
+        <button name="position" value="{{ loop.index0 }}"
+                class="dot{% if answer is not none %} is-answered{% endif %}{% if loop.index0 == run.position %} is-current{% endif %}"
+                aria-label="{{ loop.index }}번 문제{% if answer is not none %} (답함){% endif %}"
+                title="{{ loop.index }}번">{{ loop.index }}</button>
+      {% endfor %}
+    </form>
+  {% else %}
+    <progress class="thin" max="{{ run.total }}" value="{{ run.answered_count }}"></progress>
+  {% endif %}
+  <p class="muted center" data-testid="answered">답한 문제 {{ run.answered_count }} / {{ run.total }}</p>
+{% endblock %}
+
+{% block content %}
+  <section class="question">
+    <p class="question-word" data-testid="word">{{ question.word }}</p>
+    {#- 보기는 줄바꿈되는 버튼. 고르면 app.js 가 0.3초 뒤 폼을 보낸다 (UD-05) -#}
+    <form method="post" action="{{ url_for('main.exam_answer') }}" class="choices" data-auto-advance>
+      {% for choice in question.choices %}
+        <button name="choice" value="{{ loop.index0 }}" data-key="{{ loop.index }}"
+                class="choice{% if selected == loop.index0 %} is-selected{% endif %}"
+                aria-pressed="{{ 'true' if selected == loop.index0 else 'false' }}">
+          <span class="choice-number">{{ loop.index }}</span>
+          <span class="choice-text">{{ choice }}</span>
+          <span class="choice-mark">✓ 선택</span>
+        </button>
+      {% endfor %}
+    </form>
+  </section>
+
+  {% set is_last = run.position == run.total - 1 %}
+  <div class="row">
+    <form method="post" action="{{ url_for('main.exam_goto') }}">
+      <button name="position" value="{{ run.position - 1 }}" class="button" data-key="ArrowLeft"
+              {% if run.position == 0 %}disabled{% endif %}>←  이전</button>
+    </form>
+    <form method="post" action="{{ url_for('main.exam_goto') }}">
+      <button name="position" value="{{ run.position + 1 }}" class="button"
+              data-key="ArrowRight{% if not (is_last and run.complete) %} Enter{% endif %}"
+              {% if is_last %}disabled{% endif %}>다음  →</button>
+    </form>
+    {#- 제출이 꺼져 있는 이유를 옆에 적는다 (FR-15) -#}
+    <p class="muted grow end" data-testid="unanswered">
+      {%- if not unanswered -%}
+        모든 문제에 답했습니다. 제출할 수 있습니다
+      {%- elif unanswered | length <= 6 -%}
+        답하지 않은 문제: {{ unanswered | join(", ") }}번
+      {%- else -%}
+        답하지 않은 문제 {{ unanswered | length }}개
+      {%- endif -%}
+    </p>
+    <form method="post" action="{{ url_for('main.exam_submit') }}">
+      <button class="button button-primary button-wide" data-testid="submit"
+              {% if is_last and run.complete %}data-key="Enter"{% endif %}
+              {% if run.focus_submit %}autofocus{% endif %}
+              {% if not run.complete %}disabled{% endif %}>제출</button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block keyhints %}
+  {{ key_hints([("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
+{% endblock %}

@@ -1,0 +1,45 @@
+{#- 2026-11-25 - smart-voca - 모든 화면의 공통 틀: 머리, 알림 띠(DL-04), 확인 대화상자(DL-03)
+    파일 위치: src/smartvoca/web/templates/base.html -#}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}스마트 보카{% endblock %}</title>
+  {#- 아이콘을 그림 파일 없이 SVG 로 직접 그린다 (PyQt 의 theme.app_icon 과 같은 모양) -#}
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect x='4' y='4' width='120' height='120' rx='28' fill='%234f5bd5'/%3E%3Ctext x='64' y='88' font-size='68' font-family='Segoe UI,sans-serif' font-weight='700' text-anchor='middle' fill='white'%3EV%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="page {% block page_class %}{% endblock %}">
+    {% block header %}{% endblock %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="notices">
+          {% for category, message in messages %}
+            <p class="notice notice-{{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+    {% block keyhints %}{% endblock %}
+  </main>
+
+  {#- DL-03 같은 확인. 안전한 쪽(아니오)에 초점을 둔다: Enter 를 잘못 눌러도 기록이 사라지지 않게 -#}
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <h2 id="confirm-title" class="dialog-title"></h2>
+      <p class="dialog-text"></p>
+      <div class="row row-end">
+        <button value="yes" class="button" data-role="yes"></button>
+        <button value="no" class="button button-primary" data-role="no" autofocus></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -8,15 +8,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "smartvoca"
 version = "0.1.0"
-description = "토익 영단어 암기·시험 프로그램 (스마트 보카)"
+description = "토익 영단어 암기·시험 프로그램 (스마트 보카, 브라우저에서 실행)"
 requires-python = ">=3.11"
-dependencies = ["PyQt6>=6.5"]
+dependencies = ["Flask>=3.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# 웹 화면의 템플릿·CSS·JS 도 패키지에 함께 담는다
+[tool.setuptools.package-data]
+smartvoca = ["web/templates/*.html", "web/static/*"]
 
 [tool.pytest.ini_options]
 # src 배치이므로 설치하지 않아도 테스트가 smartvoca 를 찾게 한다

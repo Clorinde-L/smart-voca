@@ -1,0 +1,41 @@
+{#- 2026-11-25 - smart-voca - S-05 지난 일차: 복습과 재시험의 진입점 (ADR-11)
+    파일 위치: src/smartvoca/web/templates/day_list.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header, key_hints %}
+
+{% block header %}{{ page_header("지난 일차", url_for('main.home')) }}{% endblock %}
+
+{% block content %}
+  <p class="muted">일차마다 카드로 복습하거나 시험을 다시 볼 수 있습니다.</p>
+  {% if rows %}
+    <div class="table-wrap">
+      <table class="table" data-testid="day-table">
+        <thead><tr><th>일차</th><th>단어</th><th>상태</th><th class="end">학습</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="strong">{{ row.day_no }}일차</td>
+              <td>{{ row.range }}</td>
+              {#- 상태는 글자와 색을 함께 쓴다: 완료는 초록, 암기만 마친 일차는 주황 (§7.6) -#}
+              <td class="strong {{ 'success' if row.status == DayStatus.DONE else 'warning' }}">{{ row.status.value }}</td>
+              <td class="end">
+                <div class="row row-end tight">
+                  <form method="post" action="{{ url_for('main.exam_day', day_no=row.day_no) }}">
+                    <button class="button button-small">시험 보기</button>
+                  </form>
+                  <form method="post" action="{{ url_for('main.study_review', day_no=row.day_no) }}">
+                    <button class="button button-primary button-small">카드로 복습</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty">아직 학습한 일차가 없습니다.</p>
+  {% endif %}
+{% endblock %}
+
+{% block keyhints %}{{ key_hints([("Esc", "뒤로")]) }}{% endblock %}
