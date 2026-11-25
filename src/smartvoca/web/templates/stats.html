@@ -1,0 +1,100 @@
+{#- 2026-11-25 - smart-voca - S-10 학습 진척 통계: 진도, 정답률 추이, 자주 틀리는 단어 (VOCA-FR-031~034)
+    파일 위치: src/smartvoca/web/templates/stats.html
+    모든 값은 routes_stats → AppSession.stats() 가 DB 이력에서 계산해 준 것이다. 여기에 값을 써 넣지 않는다 (034) -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_heading %}
+
+{% block title %}통계 · 스마트 보카{% endblock %}
+
+{% block header %}{{ page_heading("학습 진척 통계") }}{% endblock %}
+
+{#- 정답률 막대 그래프 하나 (계열 1개라 범례 대신 제목이 이름이다). 막대에 마우스를 올리면 값이 보인다 -#}
+{% macro ratio_bars(points, testid) %}
+  <div class="bar-chart" role="img" aria-label="정답률 막대 그래프" data-testid="{{ testid }}">
+    <div class="bar-grid" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
+    <div class="bar-plot">
+      {% for point in points %}
+        {% set percent = (point.ratio * 100) | round | int %}
+        <div class="bar-slot" tabindex="0" title="{{ point.label }} · {{ point.correct }}/{{ point.total }} · {{ percent }}%">
+          <div class="bar" style="height: {{ [percent, 1] | max }}%"></div>
+          <span class="bar-tip">{{ percent }}%</span>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="bar-axis">
+      <span>{{ points[0].label }}</span>
+      {% if points | length > 1 %}<span>{{ points[-1].label }}</span>{% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{% block content %}
+  {#- VOCA-FR-031 진도 현황 -#}
+  <section class="tiles">
+    <div class="tile">
+      <p class="tile-label">현재 일차</p>
+      <p class="tile-value" data-testid="current-day">{{ "%d일차" % summary.current_day if summary.current_day else "모두 완료" }}</p>
+    </div>
+    <div class="tile">
+      <p class="tile-label">외운 단어</p>
+      <p class="tile-value" data-testid="memorized">{{ "{:,}".format(summary.memorized_words) }} <span class="tile-total">/ {{ "{:,}".format(summary.total_words) }}</span></p>
+    </div>
+    <div class="tile">
+      <p class="tile-label">완료한 일차</p>
+      <p class="tile-value">{{ summary.done_days }} <span class="tile-total">/ {{ summary.total_days }}</span></p>
+    </div>
+    <div class="tile">
+      <p class="tile-label">전체 정답률</p>
+      <p class="tile-value" data-testid="overall">{{ "%d%%" % ((data.overall_ratio * 100) | round | int) if data.overall_ratio is not none else "—" }}</p>
+      <p class="muted">시험 {{ data.exam_count }}회</p>
+    </div>
+  </section>
+  <div class="stat-progress">
+    <progress max="{{ summary.total_words or 1 }}" value="{{ summary.memorized_words }}"></progress>
+    <span>외운 단어 {{ (memorized_ratio * 100) | round(1) }}%</span>
+  </div>
+
+  {#- VOCA-FR-032 시험 성적 추이 -#}
+  {% if data.by_session %}
+    <section class="panel">
+      <div class="section-head">
+        <h2 class="section-title">회차별 정답률 <span class="muted">최근 {{ data.by_session | length }}회</span></h2>
+      </div>
+      {{ ratio_bars(data.by_session, "trend-session") }}
+    </section>
+
+    <section class="panel">
+      <h2 class="section-title">날짜별 정답률</h2>
+      {{ ratio_bars(data.by_date, "trend-date") }}
+      <div class="table-wrap" style="margin-top: 14px">
+        <table class="table" data-testid="date-table">
+          <thead><tr><th>날짜</th><th class="end">문제 수</th><th class="end">맞힌 수</th><th class="end">정답률</th></tr></thead>
+          <tbody>
+            {% for point in data.by_date | reverse %}
+              <tr><td>{{ point.label }}</td><td class="end">{{ point.total }}</td><td class="end">{{ point.correct }}</td><td class="end strong">{{ (point.ratio * 100) | round | int }}%</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <p class="empty" data-testid="no-exams">아직 본 시험이 없습니다.<br>시험을 보면 정답률 추이가 여기에 나타납니다.</p>
+  {% endif %}
+
+  {#- VOCA-FR-033 자주 틀리는 단어 -#}
+  {% if data.frequent_wrong %}
+    <section>
+      <h2 class="section-title">자주 틀리는 단어 상위 {{ data.frequent_wrong | length }}개</h2>
+      <div class="table-wrap" style="margin-top: 8px">
+        <table class="table" data-testid="frequent-wrong">
+          <thead><tr><th class="num">#</th><th>영단어</th><th>뜻</th><th class="end">틀린 횟수</th><th class="end">출제 횟수</th></tr></thead>
+          <tbody>
+            {% for row in data.frequent_wrong %}
+              <tr><td class="num">{{ loop.index }}</td><td class="strong">{{ row.word }}</td><td>{{ row.meaning }}</td><td class="end strong">{{ row.wrong_count }}</td><td class="end">{{ row.test_count }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -9,17 +9,18 @@
 {% block header %}{{ page_header(view.title) }}{% endblock %}
 
 {% block content %}
+  <p class="muted center" data-testid="exam-info">{{ view.question_format.label }} · {{ view.direction.label }}</p>
   <section class="panel result-summary">
     {#- 점수 고리: 둘레 길이만큼 선을 긋고, 맞힌 비율만큼만 보이게 한다. 숫자를 항상 함께 적는다 -#}
     {% set circumference = 2 * 3.14159265 * 66 %}
     <svg class="score-ring tone-{{ tone }}" viewBox="0 0 164 164" role="img"
-         aria-label="{{ view.result.total }}문제 중 {{ view.result.correct_count }}개 맞힘">
+         aria-label="{{ view.total }}문제 중 {{ view.correct_count }}개 맞힘">
       <circle class="ring-track" cx="82" cy="82" r="66"/>
       <circle class="ring-value" cx="82" cy="82" r="66"
               stroke-dasharray="{{ circumference }}"
               stroke-dashoffset="{{ circumference * (1 - ratio) }}"
               transform="rotate(-90 82 82)"/>
-      <text x="82" y="80" class="ring-score" data-testid="score">{{ view.result.correct_count }} / {{ view.result.total }}</text>
+      <text x="82" y="80" class="ring-score" data-testid="score">{{ view.correct_count }} / {{ view.total }}</text>
       <text x="82" y="104" class="ring-percent">정답률 {{ (ratio * 100) | round | int }}%</text>
     </svg>
     <div>
@@ -32,33 +33,50 @@
   </section>
 
   {% if view.wrong_items %}
-    <h2 class="section-title">틀린 단어 {{ view.wrong_items | length }}개 — {{ view.wrong_note }}</h2>
+    <h2 class="section-title">틀린 문제 {{ view.wrong_items | length }}개 — {{ view.wrong_note }}</h2>
     {#- 정답과 고른 답을 색이 아니라 열 제목으로 구분한다 (§7.6) -#}
     <div class="table-wrap">
       <table class="table" data-testid="wrong-table">
-        <thead><tr><th>단어</th><th>정답</th><th>내가 고른 답</th></tr></thead>
+        <thead><tr><th>문제</th><th>정답</th><th>내 답</th><th>형식</th></tr></thead>
         <tbody>
           {% for item in view.wrong_items %}
-            <tr><td class="strong">{{ item.word }}</td><td>{{ item.correct_meaning }}</td><td>{{ item.chosen_meaning }}</td></tr>
+            {% set q = item.question %}
+            <tr>
+              <td class="strong">{{ q.prompt }}</td>
+              <td>{{ q.answer }}</td>
+              <td>
+                {%- if q.format == QuestionFormat.OX -%}
+                  {{ item.given }} (보기: {{ q.shown }})
+                {%- else -%}
+                  {{ item.given }}
+                {%- endif -%}
+              </td>
+              <td class="muted">{{ q.format.label }} · {{ q.direction.label }}</td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% else %}
-    <p class="empty" data-testid="perfect">틀린 단어가 없습니다</p>
+    <p class="empty" data-testid="perfect">틀린 문제가 없습니다</p>
   {% endif %}
 
   {#- 다음 추천은 안 끝낸 가장 앞 일차 (ADR-21). 방금 본 일차와 같으면 보이지 않는다 -#}
-  {% set show_next = not view.is_wrong_exam and view.next_day and view.next_day != view.day_no %}
+  {% set is_wrong_exam = view.kind == ExamKind.WRONG %}
+  {% set show_next = view.kind == ExamKind.DAY and view.next_day and view.next_day != view.day_no %}
   <div class="row row-end wrap">
-    <a class="button" href="{{ url_for('main.home') }}" data-key="Escape{% if not (view.is_wrong_exam or show_next) %} Enter{% endif %}">메인으로</a>
+    <a class="button" href="{{ url_for('main.home') }}" data-key="Escape{% if not (is_wrong_exam or show_next or view.kind == ExamKind.RANDOM) %} Enter{% endif %}">메인으로</a>
     {% if view.day_no %}
       <a class="button" href="{{ url_for('main.day_detail', day_no=view.day_no) }}" data-testid="back-day">{{ view.day_no }}일차 단어 보기</a>
     {% endif %}
     {% if view.wrong_items %}
       <a class="button" href="{{ url_for('main.wrong_list') }}">오답 목록 보기</a>
     {% endif %}
-    {% if view.is_wrong_exam %}
+    <a class="button" href="{{ url_for('main.stats') }}" data-testid="to-stats">통계 보기</a>
+    {% if view.kind == ExamKind.RANDOM %}
+      <a class="button button-primary button-wide" href="{{ url_for('main.exam_setup') }}" data-key="Enter" data-testid="primary">실력 시험 다시</a>
+    {% endif %}
+    {% if is_wrong_exam %}
       <a class="button button-primary button-wide" href="{{ url_for('main.wrong_list') }}" data-key="Enter" data-testid="primary">오답 목록으로</a>
     {% elif show_next %}
       <form method="post" action="{{ url_for('main.study_day', day_no=view.next_day) }}">

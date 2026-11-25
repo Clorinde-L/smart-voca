@@ -4,26 +4,38 @@
 # 파일 위치: src/smartvoca/web/state.py
 """웹은 요청마다 끊기므로 "지금 몇 번째 카드인지", "무엇을 골랐는지"를 어딘가에 들고 있어야 한다.
 
-PyQt 에서는 화면 위젯이 이 값을 들고 있었다. 웹에서는 서버 메모리의 WebState 하나에 둔다 (ADR-20).
-사용자가 1명이고 서버가 내 PC 에만 있으므로 하나면 충분하다.
+서버 메모리의 WebState 에 둔다 (ADR-20). 2026-11-25 학교 서버에 여러 사람이 접속하므로
+브라우저(쿠키의 무작위 ID)마다 WebState 를 따로 둔다 (ADR-30, StateStore).
 저장하지 않으므로 서버를 끄면 사라진다 — "도중에 나간 암기·시험은 저장하지 않음"(ADR-12)과 같은 결과다.
 
 이 모듈은 Flask 를 모른다. 그래서 브라우저 없이 규칙(자동 넘김, 제출 조건)만 따로 테스트할 수 있다.
 """
 from __future__ import annotations
 
+import secrets
+import threading
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.cards import CardDeck
-from ..core.models import Exam, ExamResult, StartupNotice, Word, WrongEntry, WrongItem
+from ..core.models import (
+    Answer,
+    Direction,
+    Exam,
+    ExamKind,
+    ItemResult,
+    ParsedWordbook,
+    QuestionFormat,
+    StudyCard,
+    WrongEntry,
+)
 
 
 # ── 카드 (S-02) ─────────────────────────────────────────────
 class CardMode(Enum):
     # 2026-11-25 복습(REVIEW) 모드는 일차 학습으로 합쳤다 (ADR-22).
-    # 끝낸 일차를 다시 학습해도 기록은 바뀌지 않으므로 복습과 같다.
     DAY = "day"        # 일차 학습: 모두 보면 '시험 보기'가 켜진다
     WRONG = "wrong"    # 오답 학습: 모두 보면 '오답 시험'이 켜진다
 
@@ -36,51 +48,50 @@ class CardStudy:
     title: str
     deck: CardDeck
     day_no: int | None = None                      # 일차 학습의 일차. 오답 학습이면 None
-    wrong_info: Mapping[str, WrongEntry] = field(default_factory=dict)
+    wrong_info: Mapping[int, WrongEntry] = field(default_factory=dict)  # 단어 번호 → 오답 기록
     unlocked: bool = False                         # 시험 버튼이 켜졌는가 (모두 봤거나 이미 암기 완료)
+    logged: bool = False                           # 이번 묶음의 암기 이력을 남겼는가
 
     @classmethod
     def start(
         cls,
         mode: CardMode,
         title: str,
-        words: Sequence[Word],
+        cards: Sequence[StudyCard],
         day_no: int | None = None,
         already_done: bool = False,
-        wrong_info: Mapping[str, WrongEntry] | None = None,
+        wrong_info: Mapping[int, WrongEntry] | None = None,
     ) -> CardStudy:
         """항상 첫 카드부터 시작한다 (요구사항 명세서 D-03)."""
-        return cls(mode, title, CardDeck(words), day_no, wrong_info or {}, already_done)
+        return cls(mode, title, CardDeck(cards), day_no, wrong_info or {}, already_done)
 
-    def unlock_if_seen_all(self) -> bool:
+    def finish_if_seen_all(self) -> bool:
         """카드를 모두 본 '그 순간'에만 True 를 돌려준다.
 
-        부르는 쪽은 이때 한 번만 암기 완료를 저장한다(FR-12). 뒤로 갔다 와도 다시 저장하지 않는다.
+        부르는 쪽은 이때 한 번만 암기 이력을 저장한다(FR-12, VOCA-FR-014). 뒤로 갔다 와도 다시 저장하지 않는다.
         """
-        if self.deck.seen_all and not self.unlocked:
-            self.unlocked = True
+        self.unlocked = self.unlocked or self.deck.seen_all
+        if self.deck.seen_all and not self.logged:
+            self.logged = True
             return True
         return False
 
 
 # ── 시험 (S-03) ─────────────────────────────────────────────
-class ExamMode(Enum):
-    DAY = "day"
-    WRONG = "wrong"
-
-
 @dataclass
 class ExamRun:
-    """응시 중인 시험 하나. 정답 위치(answer_index)는 서버에만 있고 브라우저로 보내지 않는다."""
+    """응시 중인 시험 하나. 정답은 서버에만 있고 브라우저로 보내지 않는다."""
 
-    mode: ExamMode
+    kind: ExamKind
     title: str
     exam: Exam
-    return_url: str                   # 그만두면 돌아갈 화면
+    direction: Direction                 # 고른 방향 (섞기면 문제마다 다르다)
+    question_format: QuestionFormat
+    return_url: str                      # 그만두면 돌아갈 화면
     day_no: int | None = None
-    answers: list[int | None] = field(default_factory=list)
-    position: int = 0                 # 현재 문제 (0 부터)
-    focus_submit: bool = False        # 모두 풀어서 제출 버튼에 초점을 둘 차례인가 (UD-05)
+    answers: list[Answer] = field(default_factory=list)
+    position: int = 0                    # 현재 문제 (0 부터)
+    focus_submit: bool = False           # 모두 풀어서 제출 버튼에 초점을 둘 차례인가 (UD-05)
 
     def __post_init__(self) -> None:
         if not self.answers:
@@ -89,6 +100,10 @@ class ExamRun:
     @property
     def total(self) -> int:
         return len(self.answers)
+
+    @property
+    def question(self):
+        return self.exam.questions[self.position]
 
     @property
     def answered_count(self) -> int:
@@ -109,14 +124,31 @@ class ExamRun:
         self.focus_submit = False
 
     def choose(self, choice_index: int) -> None:
-        """현재 문제의 답을 고르고 다음 문제로 넘어간다 (UD-05).
+        """4지선다·OX 의 보기를 고른다."""
+        if self.question.format is QuestionFormat.SHORT:
+            raise ValueError("단답형 문제입니다")
+        if not 0 <= choice_index < len(self.question.choices):
+            raise ValueError("없는 보기입니다")
+        self._record(choice_index)
+
+    def write(self, text: str) -> None:
+        """단답형 답을 적는다. 비워 두면 답하지 않은 것으로 둔다."""
+        if self.question.format is not QuestionFormat.SHORT:
+            raise ValueError("단답형 문제가 아닙니다")
+        text = " ".join(text.split())
+        if not text:
+            self.answers[self.position] = None
+            self.focus_submit = False
+            return
+        self._record(text)
+
+    def _record(self, answer: Answer) -> None:
+        """현재 문제의 답을 적고 다음 문제로 넘어간다 (UD-05).
 
         0.3초 기다림은 브라우저(app.js)가 한다. 서버에 왔을 때는 이미 기다린 뒤다.
         마지막 문제면 아직 안 푼 첫 문제로 가고, 모두 풀었으면 제출 버튼에 초점을 둔다.
         """
-        if not 0 <= choice_index < len(self.exam.questions[self.position].choices):
-            raise ValueError("없는 보기입니다")
-        self.answers[self.position] = choice_index
+        self.answers[self.position] = answer
         self.focus_submit = False
         if self.position < self.total - 1:
             self.position += 1
@@ -135,16 +167,26 @@ class ResultView:
 
     title: str
     status: str
-    result: ExamResult
-    wrong_note: str                       # 틀린 단어 표 제목 뒤에 붙는 설명
+    items: tuple[ItemResult, ...]
+    wrong_note: str                       # 틀린 문항 표 제목 뒤에 붙는 설명
+    kind: ExamKind
+    direction: Direction
+    question_format: QuestionFormat
     graduated: tuple[str, ...] = ()       # 오답 시험에서 이번에 목록에서 빠진 단어
     next_day: int | None = None           # 일차 시험 뒤 추천하는 일차 (안 끝낸 가장 앞 일차)
     day_no: int | None = None             # 일차 시험이면 그 일차
-    is_wrong_exam: bool = False
 
     @property
-    def wrong_items(self) -> tuple[WrongItem, ...]:
-        return self.result.wrong_items
+    def total(self) -> int:
+        return len(self.items)
+
+    @property
+    def correct_count(self) -> int:
+        return sum(item.correct for item in self.items)
+
+    @property
+    def wrong_items(self) -> tuple[ItemResult, ...]:
+        return tuple(item for item in self.items if not item.correct)
 
 
 def cheer(correct: int, total: int) -> str:
@@ -169,13 +211,13 @@ def score_tone(correct: int, total: int) -> str:
     return "warning"
 
 
-# ── 단어장 불러오기 (DL-01) ──────────────────────────────────
+# ── 단어장 가져오기 (DL-01) ──────────────────────────────────
 @dataclass(frozen=True)
 class PendingImport:
-    """검증을 통과해 '바꾸기'를 기다리는 단어장. 확인 페이지와 실제 교체 요청 사이에 들고 있는다."""
+    """검증을 통과해 '등록'을 기다리는 단어장. 확인 페이지와 실제 반영 요청 사이에 들고 있는다."""
 
     file_name: str
-    words: tuple[Word, ...]
+    parsed: ParsedWordbook
 
 
 # ── 전체 ────────────────────────────────────────────────────
@@ -186,4 +228,41 @@ class WebState:
     result: ResultView | None = None
     pending_import: PendingImport | None = None
     hide_meaning: bool = False                         # 카드 '뜻 가리고 외우기' (UD-04, 저장하지 않음)
-    startup_notices: list[StartupNotice] = field(default_factory=list)  # 첫 화면에서 한 번 알린다
+
+    def clear_progress(self) -> None:
+        """단어장을 바꾸면 옛 단어장의 카드·시험·결과가 남아 있으면 안 된다."""
+        self.cards = self.exam = self.result = None
+
+
+class StateStore:
+    """브라우저마다의 WebState (ADR-30).
+
+    오래 쓰지 않은 것부터 지워 최대 max_states 개만 둔다. 서버 메모리가 끝없이 늘지 않게 하기 위함이다.
+    """
+
+    def __init__(self, max_states: int = 500):
+        self._states: OrderedDict[str, WebState] = OrderedDict()
+        self._max_states = max_states
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def new_id() -> str:
+        return secrets.token_urlsafe(16)
+
+    def get(self, state_id: str) -> WebState:
+        with self._lock:
+            state = self._states.get(state_id)
+            if state is None:
+                state = self._states[state_id] = WebState()
+                while len(self._states) > self._max_states:
+                    self._states.popitem(last=False)
+            else:
+                self._states.move_to_end(state_id)
+            return state
+
+    def all_states(self) -> list[WebState]:
+        with self._lock:
+            return list(self._states.values())
+
+    def __len__(self) -> int:
+        return len(self._states)

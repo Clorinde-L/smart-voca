@@ -1,0 +1,28 @@
+{#- 2026-11-25 - smart-voca - 단어 수정 (VOCA-FR-002)
+    파일 위치: src/smartvoca/web/templates/word_edit.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header %}
+
+{% block title %}단어 수정 · 스마트 보카{% endblock %}
+
+{% block header %}{{ page_header("단어 수정", back_url, back_label="← 단어 관리") }}{% endblock %}
+
+{% block content %}
+  <form method="post" action="{{ url_for('main.word_update', word_id=word.id) }}" class="panel form-stack" data-testid="edit-form">
+    <label class="field">
+      <span class="field-label">영단어</span>
+      <input class="input" type="text" name="word" value="{{ word.word }}" maxlength="100" required autofocus
+             autocomplete="off" spellcheck="false" data-testid="edit-word">
+    </label>
+    <label class="field">
+      <span class="field-label">뜻</span>
+      <input class="input" type="text" name="meaning" value="{{ word.meaning }}" maxlength="300" required
+             autocomplete="off" data-testid="edit-meaning">
+    </label>
+    <p class="muted">고쳐도 이 단어의 암기·시험 이력과 오답 기록은 그대로 이어집니다.</p>
+    <div class="row row-end">
+      <a class="button" href="{{ back_url }}">취소</a>
+      <button class="button button-primary button-wide" data-testid="edit-submit">저장</button>
+    </div>
+  </form>
+{% endblock %}

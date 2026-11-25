@@ -1,0 +1,59 @@
+{#- 2026-11-25 - smart-voca - S-09 시험 설정: 방향·형식·문제 수를 고르고 시작 (VOCA-FR-021, 023, 024)
+    파일 위치: src/smartvoca/web/templates/exam_setup.html -#}
+{% extends "base.html" %}
+{% from "macros.html" import page_header, page_heading, key_hints, choice_group %}
+
+{% block title %}{{ title }} · 스마트 보카{% endblock %}
+
+{% block header %}
+  {% if kind == ExamKind.RANDOM %}
+    {{ page_heading("실력 시험") }}
+  {% else %}
+    {{ page_header(title, back_url) }}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    {% if kind == ExamKind.RANDOM %}
+      <p data-testid="setup-intro">
+        {{ "외운 단어" if uses_memorized else "전체 단어" }} {{ "{:,}".format(pool_size) }}개 중에서 고릅니다.
+        시험 본 적 없는 단어, 오래전에 본 단어, 자주 틀린 단어가 더 자주 나옵니다.
+      </p>
+    {% elif target_count %}
+      <p data-testid="setup-intro">{{ title }}: {{ target_count }}문제{% if kind == ExamKind.WRONG %} (오답 목록 전체){% endif %}</p>
+    {% endif %}
+    {% if problem %}
+      <p class="danger" data-testid="setup-problem">{{ problem }}</p>
+    {% endif %}
+  </section>
+
+  {% if not problem %}
+    <form method="post" action="{{ url_for('main.exam_start') }}" class="panel form-stack" data-testid="setup-form">
+      <input type="hidden" name="kind" value="{{ kind.value }}">
+      {% if day_no %}<input type="hidden" name="day" value="{{ day_no }}">{% endif %}
+
+      {{ choice_group("출제 방향", "direction", Direction, settings.exam_direction) }}
+      {{ choice_group("출제 형식", "format", QuestionFormat, settings.exam_format) }}
+
+      {% if kind == ExamKind.RANDOM %}
+        <label class="field">
+          <span class="field-label">문제 수</span>
+          <input class="input input-number" type="number" name="count" min="{{ count_range[0] }}" max="{{ count_range[1] }}"
+                 value="{{ [settings.exam_count, pool_size] | min }}" required data-testid="count">
+          <span class="muted">{{ count_range[0] }}~{{ count_range[1] }}. 고를 단어보다 많으면 있는 만큼 냅니다.</span>
+        </label>
+      {% endif %}
+
+      <p class="muted">단답형: 영→한은 뜻 가운데 하나만 써도 정답입니다(띄어쓰기 무시). 한→영은 철자가 같아야 합니다(대소문자 무시).</p>
+      <div class="row row-end">
+        <a class="button" href="{{ back_url }}">취소</a>
+        <button class="button button-primary button-wide" data-key="Enter" data-testid="start" autofocus>시험 시작</button>
+      </div>
+    </form>
+  {% else %}
+    <div class="row row-end"><a class="button button-primary" href="{{ back_url }}" autofocus>돌아가기</a></div>
+  {% endif %}
+{% endblock %}
+
+{% block keyhints %}{{ key_hints([("Enter", "시험 시작")]) }}{% endblock %}

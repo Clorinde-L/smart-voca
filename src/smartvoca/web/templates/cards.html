@@ -13,6 +13,7 @@
 {% block content %}
   <section class="panel card">
     <div class="card-word-row">
+      {% if card.kind.label %}<span class="kind-tag kind-{{ card.kind.value }}" data-testid="kind">{{ card.kind.label }}</span>{% endif %}
       <p class="card-word" data-testid="word">{{ word.word }}</p>
       {{ speak_button(word.word, large=True, key="p") }}
     </div>

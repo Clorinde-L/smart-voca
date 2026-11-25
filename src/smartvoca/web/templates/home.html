@@ -16,6 +16,9 @@
             단어 {{ "{:,}".format(today.start) }} ~ {{ "{:,}".format(today.end) }} · {{ today.count }}개
             {%- if today.memorized %} · 암기 완료, 시험이 남았습니다{% endif %}
           </p>
+        {% elif not summary.total_words %}
+          <p class="hero-day" data-testid="today">단어가 없습니다</p>
+          <p class="hero-sub">단어 관리에서 단어를 등록하거나 CSV 를 가져와 주세요.</p>
         {% else %}
           <p class="hero-day" data-testid="today">모든 일차를 완료했습니다</p>
           <p class="hero-sub">일차 목록에서 아무 일차나 골라 다시 학습하거나 시험을 볼 수 있습니다.</p>
@@ -40,8 +43,8 @@
 
   <section class="tiles">
     <div class="tile"><p class="tile-label">완료한 일차</p><p class="tile-value">{{ summary.done_days }}일</p></div>
-    <div class="tile"><p class="tile-label">시험이 남은 일차</p><p class="tile-value">{{ memorized_days }}일</p></div>
-    <div class="tile"><p class="tile-label">시험까지 마친 단어</p><p class="tile-value">{{ "{:,}".format(learned_words) }}개</p></div>
+    <div class="tile"><p class="tile-label">시험이 남은 일차</p><p class="tile-value">{{ summary.memorized_days }}일</p></div>
+    <a class="tile" href="{{ url_for('main.stats') }}" data-testid="tile-memorized"><p class="tile-label">외운 단어 →</p><p class="tile-value">{{ "{:,}".format(summary.memorized_words) }} <span class="tile-total">/ {{ "{:,}".format(summary.total_words) }}</span></p></a>
     <a class="tile" href="{{ url_for('main.wrong_list') }}" data-testid="tile-wrong"><p class="tile-label">오답 단어 →</p><p class="tile-value">{{ "{:,}".format(summary.wrong_list_size) }}개</p></a>
   </section>
 
@@ -66,7 +69,15 @@
     </div>
   </section>
 
-  <p class="muted center" data-testid="wordbook-label">단어장: {{ wordbook_label }}</p>
+  <section class="panel row wrap">
+    <div class="grow">
+      <h2 class="section-title">실력 시험</h2>
+      <p class="muted">문제 수와 방향·형식을 골라 외운 단어에서 시험을 봅니다. 안 본 단어·오래된 단어·자주 틀린 단어가 더 자주 나옵니다.</p>
+    </div>
+    <a class="button button-primary button-wide" href="{{ url_for('main.exam_setup') }}" data-testid="random-exam">실력 시험 보기</a>
+  </section>
+
+  <p class="muted center" data-testid="wordbook-label">단어장 {{ "{:,}".format(summary.total_words) }} 단어 · 하루 {{ settings.day_size }}단어 · {{ summary.total_days }}일차</p>
 {% endblock %}
 
 {% block keyhints %}

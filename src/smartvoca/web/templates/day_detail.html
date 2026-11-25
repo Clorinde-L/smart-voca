@@ -29,7 +29,7 @@
       <p>{{ status_badge(status, "status") }}{% if is_current %} <span class="current-tag">오늘의 학습</span>{% endif %}</p>
       <p class="muted" data-testid="exam-hint">
         {%- if status == DayStatus.AVAILABLE -%}
-          카드 {{ words | length }}장을 모두 보면 시험을 볼 수 있습니다.
+          카드 {{ words | length }}장{% if review_count %}(+ 복습 카드 최대 {{ review_count }}장){% endif %}을 모두 보면 시험을 볼 수 있습니다.
         {%- elif status == DayStatus.MEMORIZED -%}
           카드를 모두 봤습니다. 시험을 보면 이 일차가 완료됩니다.
         {%- else -%}
@@ -62,7 +62,7 @@
               <span class="word-cell">
                 {{ speak_button(word.word) }}
                 <span class="strong">{{ word.word }}</span>
-                {% if word.word in wrong_words %}<span class="mark-wrong" title="오답 목록에 있는 단어">오답</span>{% endif %}
+                {% if word.id in wrong_words %}<span class="mark-wrong" title="오답 목록에 있는 단어">오답</span>{% endif %}
               </span>
             </td>
             <td>{{ word.meaning }}</td>

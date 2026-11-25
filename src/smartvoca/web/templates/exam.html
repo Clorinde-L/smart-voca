@@ -1,5 +1,6 @@
-{#- 2026-11-25 - smart-voca - S-03 시험 응시: 일차 시험·오답 시험 공용. 정오는 보여 주지 않는다 (ADR-10)
-    파일 위치: src/smartvoca/web/templates/exam.html -#}
+{#- 2026-11-25 - smart-voca - S-03 시험 응시: 모든 시험 공용. 정오는 보여 주지 않는다 (ADR-10)
+    파일 위치: src/smartvoca/web/templates/exam.html
+    2026-11-25 형식(4지선다·단답형·OX)과 방향(영→한·한→영)에 따라 문제를 그린다 (ADR-27) -#}
 {% extends "base.html" %}
 {% from "macros.html" import page_header, key_hints, speak_button %}
 
@@ -42,23 +43,43 @@
 {% endblock %}
 
 {% block content %}
+  {% set is_en_prompt = question.direction == Direction.EN_KO %}
   <section class="question">
+    <p class="muted center" data-testid="format">{{ question.format.label }} · {{ question.direction.label }}</p>
+    {#- 영→한이면 영단어를 크게, 한→영이면 뜻을 문장 크기로 보여 준다 -#}
     <div class="card-word-row">
-      <p class="question-word" data-testid="word">{{ question.word }}</p>
-      {{ speak_button(question.word, large=True, key="p") }}
+      <p class="{{ 'question-word' if is_en_prompt else 'question-meaning' }}" data-testid="word">{{ question.prompt }}</p>
+      {% if is_en_prompt %}{{ speak_button(question.prompt, large=True, key="p") }}{% endif %}
     </div>
-    {#- 보기는 줄바꿈되는 버튼. 고르면 app.js 가 0.3초 뒤 폼을 보낸다 (UD-05) -#}
-    <form method="post" action="{{ url_for('main.exam_answer') }}" class="choices" data-auto-advance>
-      {% for choice in question.choices %}
-        <button name="choice" value="{{ loop.index0 }}" data-key="{{ loop.index }}"
-                class="choice{% if selected == loop.index0 %} is-selected{% endif %}"
-                aria-pressed="{{ 'true' if selected == loop.index0 else 'false' }}">
-          <span class="choice-number">{{ loop.index }}</span>
-          <span class="choice-text">{{ choice }}</span>
-          <span class="choice-mark">✓ 선택</span>
-        </button>
-      {% endfor %}
-    </form>
+
+    {% if question.format == QuestionFormat.SHORT %}
+      {#- 단답형: 적고 Enter. 적은 답은 다시 돌아오면 그대로 보인다 -#}
+      <form method="post" action="{{ url_for('main.exam_answer') }}" class="short-answer">
+        <input class="input input-answer" type="text" name="text" value="{{ selected or '' }}" autocomplete="off"
+               autocapitalize="off" spellcheck="false" autofocus data-testid="answer"
+               placeholder="{{ '뜻을 적고 Enter' if is_en_prompt else '영단어를 적고 Enter' }}" aria-label="답">
+        <button class="button button-primary">답하기</button>
+      </form>
+    {% else %}
+      {% if question.format == QuestionFormat.OX %}
+        {#- OX: 보여 준 짝이 맞는지 고른다 -#}
+        <p class="ox-pair" data-testid="shown">{{ question.shown }}</p>
+        <p class="muted center">위 {{ "뜻이 이 단어의 뜻" if is_en_prompt else "단어가 이 뜻의 단어" }}이 맞나요?</p>
+      {% endif %}
+      {#- 보기는 줄바꿈되는 버튼. 고르면 app.js 가 0.3초 뒤 폼을 보낸다 (UD-05) -#}
+      <form method="post" action="{{ url_for('main.exam_answer') }}"
+            class="choices{% if question.format == QuestionFormat.OX %} choices-ox{% endif %}" data-auto-advance>
+        {% for choice in question.choices %}
+          <button name="choice" value="{{ loop.index0 }}" data-key="{{ loop.index }}{% if question.format == QuestionFormat.OX %} {{ 'o' if loop.first else 'x' }}{% endif %}"
+                  class="choice{% if selected == loop.index0 %} is-selected{% endif %}"
+                  aria-pressed="{{ 'true' if selected == loop.index0 else 'false' }}">
+            <span class="choice-number">{{ loop.index }}</span>
+            <span class="choice-text">{{ choice }}</span>
+            <span class="choice-mark">✓ 선택</span>
+          </button>
+        {% endfor %}
+      </form>
+    {% endif %}
   </section>
 
   {% set is_last = run.position == run.total - 1 %}
@@ -92,5 +113,11 @@
 {% endblock %}
 
 {% block keyhints %}
-  {{ key_hints([("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("P", "발음"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
+  {% if question.format == QuestionFormat.SHORT %}
+    {{ key_hints([("Enter", "답하기"), ("Esc", "그만두기")]) }}
+  {% elif question.format == QuestionFormat.OX %}
+    {{ key_hints([("O X", "고르기"), ("← →", "문제 이동"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
+  {% else %}
+    {{ key_hints([("1 2 3 4", "보기 선택"), ("← →", "문제 이동"), ("P", "발음"), ("Enter", "다음·제출"), ("Esc", "그만두기")]) }}
+  {% endif %}
 {% endblock %}

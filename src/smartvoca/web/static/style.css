@@ -88,10 +88,10 @@ a { color: inherit; }
 
 /* ── 메뉴 막대 (ADR-22) ─────────────────────────────────── */
 .topbar { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border); }
-.topbar-inner { max-width: 960px; margin: 0 auto; padding: 0 var(--page-margin); display: flex; align-items: center; gap: 6px; min-height: 56px; }
+.topbar-inner { max-width: 1040px; margin: 0 auto; padding: 6px var(--page-margin); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 56px; }
 .brand { display: inline-flex; align-items: center; gap: 8px; margin-right: 14px; font-weight: 700; font-size: 1.05rem; text-decoration: none; }
 .brand-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font-size: 0.85rem; }
-.nav-link { padding: 7px 12px; border-radius: 8px; color: var(--text-muted); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.nav-link { padding: 7px 10px; border-radius: 8px; color: var(--text-muted); text-decoration: none; font-weight: 600; white-space: nowrap; }
 .nav-link:hover { background: var(--surface-muted); color: var(--text); }
 .nav-link.is-active { background: var(--primary-soft); color: var(--primary); }
 .nav-count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 0.78rem; text-align: center; }
@@ -356,3 +356,47 @@ kbd { background: var(--surface); color: var(--text-muted); border: 1px solid va
   .topbar-inner { gap: 2px; }
   .nav-link { padding: 7px 8px; }
 }
+
+/* ── 2026-11-25 기말 대응: 입력 폼, 시험 형식, 통계 (UI/UX 설계서 S-07, S-09~S-11) ───── */
+.form-stack { display: flex; flex-direction: column; gap: 16px; }
+.form-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.grow-1 { flex: 1 1 180px; }
+.grow-2 { flex: 2 1 280px; }
+.field { display: flex; flex-direction: column; gap: 6px; border: none; margin: 0; padding: 0; min-width: 0; }
+.field-label { font-weight: 700; font-size: 0.93rem; padding: 0; }
+.input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 9px 12px; min-width: 0; }
+.input:focus { outline: none; border: 2px solid var(--primary); padding: 8px 11px; }
+.input-number { width: 120px; }
+.segmented { display: flex; flex-wrap: wrap; gap: 6px; }
+.segment { position: relative; cursor: pointer; }
+.segment input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.segment span { display: inline-block; padding: 7px 16px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-muted); font-weight: 600; }
+.segment input:checked + span { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.segment input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.option-box { border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+code { background: var(--surface-muted); border-radius: 6px; padding: 0 5px; font-size: 0.9em; }
+
+.kind-tag { padding: 2px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+.kind-review { background: var(--warning-soft); color: var(--warning); }
+.kind-wrong { background: var(--danger-soft); color: var(--danger); }
+.question-meaning { font-size: 1.6rem; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.ox-pair { font-size: 1.35rem; text-align: center; padding: 14px; border: 1px dashed var(--border-strong); border-radius: 12px; overflow-wrap: anywhere; }
+.choices-ox { flex-direction: row; }
+.choices-ox .choice { flex: 1; justify-content: center; font-size: 1.4rem; font-weight: 700; }
+.short-answer { display: flex; gap: 10px; }
+.input-answer { flex: 1; font-size: 1.25rem; padding: 12px 16px; }
+.input-answer:focus { padding: 11px 15px; }
+.tile-total { font-size: 1rem; color: var(--text-muted); font-weight: 600; }
+.stat-progress { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+
+/* 정답률 막대: 계열 하나라 강조색 하나. 막대 끝 4px 둥글게, 막대 사이 2px 이상 틈 */
+.bar-chart { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: 180px auto; gap: 4px 8px; margin-top: 12px; }
+.bar-grid { display: flex; flex-direction: column; justify-content: space-between; color: var(--text-muted); font-size: 0.75rem; text-align: right; }
+.bar-plot { display: flex; align-items: flex-end; gap: 3px; border-bottom: 1px solid var(--border-strong); background: linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% 50%; }
+.bar-slot { flex: 1; max-width: 48px; height: 100%; display: flex; align-items: flex-end; position: relative; outline: none; }
+.bar { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; }
+.bar-slot:hover .bar, .bar-slot:focus .bar { background: var(--primary-hover); }
+.bar-tip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); display: none; background: var(--text); color: var(--surface); font-size: 0.75rem; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.bar-slot:hover .bar-tip, .bar-slot:focus .bar-tip { display: block; }
+.bar-axis { grid-column: 2; display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.8rem; }
+@media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, 1fr); } }

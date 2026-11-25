@@ -1,17 +1,33 @@
-{#- 2026-11-25 - smart-voca - S-07 단어 목록: 전체 단어 검색표, 단어장 불러오기·내보내기 (UD-06)
+{#- 2026-11-25 - smart-voca - S-07 단어 관리: 등록·검색·수정·삭제, CSV 가져오기·내보내기 (VOCA-FR-001~004, UD-06)
     파일 위치: src/smartvoca/web/templates/wordbook.html -#}
 {% extends "base.html" %}
 {% from "macros.html" import page_heading, key_hints %}
 
-{% block title %}단어 목록 · 스마트 보카{% endblock %}
-{% block header %}{{ page_heading("단어 목록", "{:,} 단어".format(total)) }}{% endblock %}
+{% block title %}단어 관리 · 스마트 보카{% endblock %}
+
+{% block header %}{{ page_heading("단어 관리", "{:,} 단어 · {}일차".format(total, day_count)) }}{% endblock %}
 
 {% block content %}
-  {#- 자주 쓰지 않는 파일 작업은 현재 단어장 줄 오른쪽에 작게 둔다 -#}
-  <div class="row wrap">
-    <p class="strong grow" data-testid="current">현재 단어장: {{ wordbook_label }} ({{ day_count }}일차)</p>
+  {#- VOCA-FR-001 직접 등록. 입력에 문제가 있으면 적은 값을 그대로 돌려준다 -#}
+  <form method="post" action="{{ url_for('main.word_add') }}" class="panel form-row" id="add" data-testid="add-form">
+    <label class="field grow-1">
+      <span class="field-label">영단어</span>
+      <input class="input" type="text" name="word" value="{{ form.get('word', '') }}" maxlength="100" required
+             autocomplete="off" spellcheck="false" data-testid="add-word">
+    </label>
+    <label class="field grow-2">
+      <span class="field-label">뜻</span>
+      <input class="input" type="text" name="meaning" value="{{ form.get('meaning', '') }}" maxlength="300" required
+             autocomplete="off" placeholder="예: [명] 안건, 의제" data-testid="add-meaning">
+    </label>
+    <button class="button button-primary" data-testid="add-submit">등록</button>
+  </form>
+
+  {#- VOCA-FR-003 CSV 가져오기와 내보내기 -#}
+  <section class="row wrap">
+    <p class="muted grow">CSV(첫 줄 <code>영단어,뜻</code> 또는 <code>word,meaning</code>)를 가져오면 확인 화면에서 <b>추가</b>(이미 있는 단어는 건너뜀) 또는 <b>바꾸기</b>(전부 지우고 새로)를 고릅니다.</p>
     <form method="post" action="{{ url_for('main.import_wordbook') }}" enctype="multipart/form-data" data-autosubmit>
-      <label class="button button-small file-button">불러오기
+      <label class="button button-small file-button">CSV 가져오기
         <input type="file" name="file" accept=".csv,text/csv" hidden>
       </label>
     </form>
@@ -21,15 +37,15 @@
     {% else %}
       <button class="button button-small" disabled title="내보낼 오답 단어가 없습니다.">오답 내보내기</button>
     {% endif %}
-  </div>
-  <p class="muted">다른 단어장(CSV: word,meaning)을 불러오면 학습 기록이 모두 지워집니다. 기본 단어장으로 되돌리려면 data/toeic_words.csv 를 불러오세요. 내보낸 파일은 브라우저의 다운로드 폴더에 저장됩니다.</p>
+  </section>
 
+  {#- VOCA-FR-004 검색 -#}
   <form method="get" action="{{ url_for('main.wordbook') }}" class="row search-row" role="search">
     <input type="search" name="q" value="{{ query }}" class="search" data-search
            placeholder="영단어나 뜻으로 검색  ·  숫자를 넣으면 그 일차의 단어  (Enter)" aria-label="단어 검색"
            {% if query %}autofocus{% endif %}>
     <span class="muted" data-testid="count">
-      {%- if rows | length == total %}{{ "{:,}".format(total) }}개{% else %}{{ "{:,}".format(rows | length) }} / {{ "{:,}".format(total) }}개{% endif -%}
+      {%- if query %}{{ "{:,}".format(rows | length) }} / {{ "{:,}".format(total) }}개{% else %}{{ "{:,}".format(total) }}개{% endif -%}
     </span>
     {% if query %}<a class="button button-small" href="{{ url_for('main.wordbook') }}" data-key="Escape">검색 지우기</a>{% endif %}
   </form>
@@ -37,17 +53,36 @@
   {% if rows %}
     <div class="table-wrap table-scroll">
       <table class="table table-fixed" data-testid="word-table">
-        <colgroup><col style="width: 84px"><col style="width: 200px"><col></colgroup>
-        <thead><tr><th>일차</th><th>영단어</th><th>뜻</th></tr></thead>
+        <colgroup><col style="width: 78px"><col style="width: 190px"><col><col style="width: 132px"></colgroup>
+        <thead><tr><th>일차</th><th>영단어</th><th>뜻</th><th class="end">관리</th></tr></thead>
         <tbody>
           {% for day_no, word in rows %}
-            <tr><td><a href="{{ url_for('main.day_detail', day_no=day_no) }}">{{ day_no }}일차</a></td><td class="strong">{{ word.word }}</td><td class="ellipsis" title="{{ word.meaning }}">{{ word.meaning }}</td></tr>
+            <tr>
+              <td><a href="{{ url_for('main.day_detail', day_no=day_no) }}">{{ day_no }}일차</a></td>
+              <td class="strong">{{ word.word }}</td>
+              <td class="ellipsis" title="{{ word.meaning }}">{{ word.meaning }}</td>
+              <td class="end">
+                <span class="row tight row-end">
+                  <a class="button button-small" href="{{ url_for('main.word_edit', word_id=word.id) }}" data-testid="edit-{{ word.id }}">수정</a>
+                  <form method="post" action="{{ url_for('main.word_delete', word_id=word.id) }}"
+                        data-confirm-title="단어 삭제" data-confirm-yes="삭제" data-confirm-no="취소"
+                        data-confirm="&quot;{{ word.word }}&quot; 을(를) 지울까요? 오답 기록도 함께 지워집니다. 지난 암기·시험 이력은 통계에 남습니다.">
+                    <input type="hidden" name="q" value="{{ query }}">
+                    <button class="button button-small button-danger" data-testid="delete-{{ word.id }}">삭제</button>
+                  </form>
+                </span>
+              </td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% if hidden_count %}
+      <p class="muted center" data-testid="more">처음 {{ "{:,}".format(rows | length) }}개만 보입니다.
+        <a href="{{ url_for('main.wordbook', all=1) }}">나머지 {{ "{:,}".format(hidden_count) }}개도 보기</a> · 검색하면 전체에서 찾습니다.</p>
+    {% endif %}
   {% else %}
-    <p class="empty" data-testid="empty">검색 결과가 없습니다</p>
+    <p class="empty" data-testid="empty">{{ "검색 결과가 없습니다" if query else "등록된 단어가 없습니다" }}</p>
   {% endif %}
 {% endblock %}
 
