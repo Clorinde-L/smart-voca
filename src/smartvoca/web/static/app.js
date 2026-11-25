@@ -8,7 +8,8 @@
 //   data-autosubmit              : 안의 입력이 바뀌면 바로 폼을 보낸다 (체크 상자, 파일 고르기)
 //   data-reveal                  : 가린 뜻을 연다 (UD-04)
 //   data-speak="word"            : 누르면 그 단어를 읽어 준다 (ADR-24)
-//   data-theme-toggle            : 누를 때마다 테마를 자동 → 밝게 → 어둡게로 바꾼다 (ADR-23)
+//   data-theme-choice="dark"     : 밝기를 고른다 — 자동·밝게·어둡게 (ADR-23)
+//   data-accent-choice="sea"     : 강조색을 고른다 (ADR-32)
 "use strict";
 
 const AUTO_ADVANCE_MS = 300; // 고른 보기를 눈으로 확인할 틈 (UD-05)
@@ -32,6 +33,7 @@ function findKeyTarget(name) {
 document.addEventListener("keydown", (event) => {
   if (event.altKey || event.metaKey) return;
   if (document.querySelector("dialog[open]")) return; // 대화상자가 떠 있으면 대화상자가 키를 받는다
+  if (event.target.closest("[data-theme-menu]")) return; // 테마 메뉴 안의 키는 메뉴가 쓴다 (Enter 로 시험이 시작되지 않게)
 
   // Ctrl+F: 단어 목록 화면에서는 브라우저 찾기 대신 검색창으로 간다
   const search = document.querySelector("[data-search]");
@@ -120,34 +122,68 @@ for (const button of document.querySelectorAll("[data-reveal]")) {
   });
 }
 
-// ── 테마 (ADR-23) ─────────────────────────────────────────
-// 선택은 이 브라우저에만 기억한다(localStorage). 학습 기록이 아니라 보기 설정이기 때문이다.
-const THEMES = ["auto", "light", "dark"];
-const THEME_LABELS = { auto: "자동", light: "밝게", dark: "어둡게" };
+// ── 테마: 밝기(ADR-23) × 강조색(ADR-32) ──────────────────
+// 선택은 이 브라우저에만 기억한다(localStorage). 학습 기록이 아니라 보기 설정이고,
+// 로그인이 없어 DB 에 두면 서버에 들어온 모든 사람의 화면이 함께 바뀌기 때문이다.
+// 처음 그릴 때의 적용은 base.html <head> 의 짧은 스크립트가 한다(화면이 번쩍이지 않게). 여기서는 바꾸기만 한다.
+const DEFAULTS = { theme: "auto", accent: "indigo" };
 
-function currentTheme() {
-  return document.documentElement.dataset.theme || "auto";
-}
-
-function applyTheme(theme) {
-  if (theme === "auto") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
+function remember(key, value, defaultValue) {
   try {
-    if (theme === "auto") localStorage.removeItem("smartvoca-theme");
-    else localStorage.setItem("smartvoca-theme", theme);
+    if (value === defaultValue) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch (error) {
     // 저장을 못 해도 지금 화면에는 적용된다
   }
-  for (const label of document.querySelectorAll("[data-theme-label]")) label.textContent = THEME_LABELS[theme];
 }
 
-for (const button of document.querySelectorAll("[data-theme-toggle]")) {
-  applyTheme(currentTheme()); // 버튼 글자를 지금 테마에 맞춘다
-  button.addEventListener("click", () => {
-    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
-    applyTheme(next);
+function setRootData(name, value, defaultValue) {
+  if (value === defaultValue) delete document.documentElement.dataset[name];
+  else document.documentElement.dataset[name] = value;
+}
+
+// 지금 고른 칩에 aria-pressed 를 켠다 (모양은 CSS 가 [aria-pressed="true"] 로 그린다)
+function markThemeChoices() {
+  const theme = document.documentElement.dataset.theme || DEFAULTS.theme;
+  const accent = document.documentElement.dataset.accent || DEFAULTS.accent;
+  for (const chip of document.querySelectorAll("[data-theme-choice]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.themeChoice === theme));
+  }
+  for (const chip of document.querySelectorAll("[data-accent-choice]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.accentChoice === accent));
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const themeChip = event.target.closest("[data-theme-choice]");
+  const accentChip = event.target.closest("[data-accent-choice]");
+  if (themeChip) {
+    setRootData("theme", themeChip.dataset.themeChoice, DEFAULTS.theme);
+    remember("smartvoca-theme", themeChip.dataset.themeChoice, DEFAULTS.theme);
+  } else if (accentChip) {
+    setRootData("accent", accentChip.dataset.accentChoice, DEFAULTS.accent);
+    remember("smartvoca-accent", accentChip.dataset.accentChoice, DEFAULTS.accent);
+  } else {
+    // 메뉴 바깥을 누르면 닫는다
+    for (const menu of document.querySelectorAll("[data-theme-menu][open]")) {
+      if (!menu.contains(event.target)) menu.open = false;
+    }
+    return;
+  }
+  markThemeChoices();
+});
+
+for (const menu of document.querySelectorAll("[data-theme-menu]")) {
+  // 메뉴가 열려 있을 때 Esc 는 메뉴만 닫는다 (화면의 '뒤로' 단축키로 넘기지 않는다)
+  menu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu.open) {
+      event.stopPropagation();
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    }
   });
 }
+markThemeChoices();
 
 // ── 발음 듣기 (ADR-24) ─────────────────────────────────────
 // 브라우저에 내장된 음성 합성을 쓴다. 내 PC 에 설치된 영어 음성(localService)을 먼저 골라 인터넷 없이 읽는다.

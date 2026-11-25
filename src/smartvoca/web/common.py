@@ -66,6 +66,19 @@ NAV_ITEMS = (
 )
 
 
+# 화면 테마 (ADR-32). 고른 값은 브라우저에만 저장하므로(localStorage) 서버는 선택지만 그려 보낸다.
+# 강조색 값은 style.css 의 [data-accent="..."] 블록에 있다. 이름을 바꾸면 거기도 함께 고친다.
+THEME_BRIGHTNESS = (("auto", "자동"), ("light", "밝게"), ("dark", "어둡게"))
+THEME_ACCENTS = (
+    ("indigo", "남보라"),  # 기본값
+    ("sea", "바다"),
+    ("forest", "숲"),
+    ("rose", "로즈"),
+    ("sunset", "노을"),
+    ("mono", "모노"),
+)
+
+
 def _nav_endpoint() -> str | None:
     """메뉴에서 켤 항목을 고를 때 쓰는 엔드포인트. 오답 카드 학습은 '오답 학습'에 속한다."""
     endpoint = request.endpoint
@@ -85,6 +98,8 @@ def template_globals() -> dict:
         "QuestionFormat": QuestionFormat,
         "ExamKind": ExamKind,
         "nav_items": NAV_ITEMS,
+        "theme_brightness": THEME_BRIGHTNESS,
+        "theme_accents": THEME_ACCENTS,
         "nav_endpoint": None,
         "nav_wrong_count": 0,
     }

@@ -1,12 +1,18 @@
 /* 2026-11-25 - smart-voca - 화면 전체의 색·글꼴·배치 (UI/UX 설계서 §7)
    파일 위치: src/smartvoca/web/static/style.css
    2026-11-25 UI 개편: 모든 색을 변수로 옮기고 어두운 테마를 더함 (ADR-23)
+   2026-11-25 색 테마: 강조색 6가지 × 밝기(자동·밝게·어둡게) (ADR-32)
 
-   색은 아래 :root 변수에만 쓴다. 규칙 쪽에는 색 코드가 없고 var(--이름) 만 있다.
-   그래서 어두운 테마는 변수 값만 바꿔 끼우면 된다.
-   - 기본(밝게): :root
-   - 운영체제가 어두운 테마이고 사용자가 '밝게'를 고르지 않았을 때: @media 안의 :root:not([data-theme="light"])
-   - 사용자가 '어둡게'를 골랐을 때: :root[data-theme="dark"] */
+   색은 아래 변수에만 쓴다. 규칙 쪽에는 색 코드가 없고 var(--이름) 만 있다.
+   그래서 테마는 변수 값만 바꿔 끼우면 된다. 두 갈래가 서로 독립이다.
+   1) 밝기 — 회색 계열(배경·표면·글자·상태색). <html data-theme> 로 고른다.
+      - 기본(밝게): :root
+      - 운영체제가 어두운 테마이고 사용자가 '밝게'를 고르지 않았을 때: @media 안의 :root:not([data-theme="light"])
+      - 사용자가 '어둡게'를 골랐을 때: :root[data-theme="dark"]
+      밝기 블록은 color-scheme 도 light / dark 로 바꾼다.
+   2) 강조색 — primary·hero 계열. <html data-accent> 로 고른다(없으면 남보라).
+      값마다 light-dark(밝을 때, 어두울 때) 로 적어, 위에서 정해진 color-scheme 에 따라 브라우저가 하나를 쓴다.
+      그래서 강조색 6개 × 밝기 2개를 블록 12개가 아니라 6개로 적는다. */
 
 :root {
   /* 차분한 남보라를 강조색 하나로 쓰고, 나머지는 회색 계열로 둔다 */
@@ -20,13 +26,6 @@
   --text: #141a2a;
   --text-muted: #677086;
   --text-disabled: #a3aabb;
-  --primary: #4f5bd5;
-  --primary-hover: #414cc0;
-  --primary-pressed: #3640a8;
-  --primary-soft: #eceefc;
-  --primary-soft-strong: #dfe2fb;
-  --primary-disabled: #b9bfee;
-  --on-primary: #ffffff;
   --success: #1f9d61;
   --success-soft: #e4f6ec;
   --on-success: #ffffff;
@@ -35,11 +34,11 @@
   --danger: #d1435b;
   --danger-soft: #fdeaee;
   --track: #dfe3ec;
-  --hero-from: #5a66e0;
-  --hero-to: #3f49b8;
-  --hero-muted: #dfe2fb;
   --shadow: 0 6px 20px rgba(20, 26, 42, 0.06);
-  --shadow-strong: 0 10px 28px rgba(63, 73, 184, 0.28);
+  /* 강조색에서 나오는 값. :root 에서 계산하므로 <html data-accent> 를 따른다 */
+  --shadow-strong: 0 10px 28px light-dark(color-mix(in srgb, var(--hero-to) 30%, transparent), rgba(0, 0, 0, 0.45));
+  --hero-button-text: var(--hero-to);
+  --hero-button-hover: color-mix(in srgb, var(--hero-to) 10%, #ffffff);
   --backdrop: rgba(20, 26, 42, 0.35);
 
   --page-margin: 28px;
@@ -60,12 +59,9 @@
     --background: #0f1320; --surface: #181d2c; --surface-soft: #1c2233; --surface-muted: #252c40;
     --surface-hover: #1f2638; --border: #2a3147; --border-strong: #3b4460;
     --text: #e6e9f2; --text-muted: #9aa3b8; --text-disabled: #5c647a;
-    --primary: #7680ec; --primary-hover: #8a93f2; --primary-pressed: #6570e0;
-    --primary-soft: #262c52; --primary-soft-strong: #30376a; --primary-disabled: #3d4374; --on-primary: #ffffff;
     --success: #3ecf8e; --success-soft: #163428; --on-success: #0f1320; --warning: #e9a93f; --warning-soft: #3a2d12;
     --danger: #f07089; --danger-soft: #3d1d27; --track: #2c3348;
-    --hero-from: #3d46a8; --hero-to: #252b70; --hero-muted: #c4c9f5;
-    --shadow: 0 6px 20px rgba(0, 0, 0, 0.35); --shadow-strong: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     --backdrop: rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
@@ -74,14 +70,89 @@
   --background: #0f1320; --surface: #181d2c; --surface-soft: #1c2233; --surface-muted: #252c40;
   --surface-hover: #1f2638; --border: #2a3147; --border-strong: #3b4460;
   --text: #e6e9f2; --text-muted: #9aa3b8; --text-disabled: #5c647a;
-  --primary: #7680ec; --primary-hover: #8a93f2; --primary-pressed: #6570e0;
-  --primary-soft: #262c52; --primary-soft-strong: #30376a; --primary-disabled: #3d4374; --on-primary: #ffffff;
   --success: #3ecf8e; --success-soft: #163428; --on-success: #0f1320; --warning: #e9a93f; --warning-soft: #3a2d12;
   --danger: #f07089; --danger-soft: #3d1d27; --track: #2c3348;
-  --hero-from: #3d46a8; --hero-to: #252b70; --hero-muted: #c4c9f5;
-  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35); --shadow-strong: 0 10px 28px rgba(0, 0, 0, 0.45);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   --backdrop: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
+}
+
+/* 강조색 (ADR-32). 선택지 목록은 web/common.py 의 THEME_ACCENTS 와 같아야 한다.
+   [data-accent] 는 <html> 에도, 고르기 메뉴의 색 견본(.swatch)에도 붙는다. 견본은 자기 강조색을 칠해 보여 준다.
+   남보라는 기본값이라 :root 에도 건다 */
+:root, [data-accent="indigo"] {
+  --primary: light-dark(#4f5bd5, #7680ec);
+  --primary-hover: light-dark(#414cc0, #8a93f2);
+  --primary-pressed: light-dark(#3640a8, #6570e0);
+  --primary-soft: light-dark(#eceefc, #262c52);
+  --primary-soft-strong: light-dark(#dfe2fb, #30376a);
+  --primary-disabled: light-dark(#b9bfee, #3d4374);
+  --on-primary: light-dark(#ffffff, #ffffff);
+  --hero-from: light-dark(#5a66e0, #3d46a8);
+  --hero-to: light-dark(#3f49b8, #252b70);
+  --hero-muted: light-dark(#dfe2fb, #c4c9f5);
+}
+/* 아래 값은 ai-agent/claude/261125_테마/script/palette.py 로 계산했다.
+   강조색 위 글자(--on-primary) 대비가 밝게·어둡게 모두 4.5:1 이상(WCAG AA)이 되게 골랐다 */
+[data-accent="sea"] {
+  --primary: light-dark(#0b74a0, #3fb0d9);
+  --primary-hover: light-dark(#0a668d, #56b9de);
+  --primary-pressed: light-dark(#08587a, #399ec3);
+  --primary-soft: light-dark(#e7f1f6, #203a4f);
+  --primary-soft-strong: light-dark(#d3e6ee, #244960);
+  --primary-disabled: light-dark(#9dc7d9, #2a5f7a);
+  --on-primary: light-dark(#ffffff, #0f1320);
+  --hero-from: light-dark(#1f7fa8, #296986);
+  --hero-to: light-dark(#095d80, #1d4258);
+  --hero-muted: light-dark(#d3e6ee, #b2dff0);
+}
+[data-accent="forest"] {
+  --primary: light-dark(#26804a, #4cbb78);
+  --primary-hover: light-dark(#217141, #61c388);
+  --primary-pressed: light-dark(#1d6138, #44a86c);
+  --primary-soft: light-dark(#e9f2ed, #223d3b);
+  --primary-soft-strong: light-dark(#d8e8de, #284c43);
+  --primary-disabled: light-dark(#a8ccb7, #2f644e);
+  --on-primary: light-dark(#ffffff, #0f1320);
+  --hero-from: light-dark(#378a58, #316f50);
+  --hero-to: light-dark(#1e663b, #21453a);
+  --hero-muted: light-dark(#d8e8de, #b7e4c9);
+}
+[data-accent="rose"] {
+  --primary: light-dark(#bf3a78, #ec75ad);
+  --primary-hover: light-dark(#a8336a, #ee86b7);
+  --primary-pressed: light-dark(#912c5b, #d4699c);
+  --primary-soft: light-dark(#f9ebf2, #422f46);
+  --primary-soft-strong: light-dark(#f3dce7, #583753);
+  --primary-disabled: light-dark(#e5b0c9, #774566);
+  --on-primary: light-dark(#ffffff, #0f1320);
+  --hero-from: light-dark(#c44a83, #89496e);
+  --hero-to: light-dark(#992e60, #51304a);
+  --hero-muted: light-dark(#f3dce7, #f7c8de);
+}
+[data-accent="sunset"] {
+  --primary: light-dark(#c0521a, #f08f55);
+  --primary-hover: light-dark(#a94817, #f29c69);
+  --primary-pressed: light-dark(#923e14, #d8814c);
+  --primary-soft: light-dark(#f9eee8, #433434);
+  --primary-soft-strong: light-dark(#f4e0d6, #593f38);
+  --primary-disabled: light-dark(#e6baa3, #79503e);
+  --on-primary: light-dark(#ffffff, #0f1320);
+  --hero-from: light-dark(#c5602c, #8b573d);
+  --hero-to: light-dark(#9a4215, #533830);
+  --hero-muted: light-dark(#f4e0d6, #f9d2bb);
+}
+[data-accent="mono"] {
+  --primary: light-dark(#3d4555, #c3c9d5);
+  --primary-hover: light-dark(#363d4b, #cacfda);
+  --primary-pressed: light-dark(#2e3441, #b0b5c0);
+  --primary-soft: light-dark(#ececee, #3a3f4e);
+  --primary-soft-strong: light-dark(#dcdee0, #4b515f);
+  --primary-disabled: light-dark(#b1b5bb, #656a78);
+  --on-primary: light-dark(#ffffff, #0f1320);
+  --hero-from: light-dark(#4d5463, #727784);
+  --hero-to: light-dark(#313744, #454a56);
+  --hero-muted: light-dark(#dcdee0, #e7e9ee);
 }
 
 * { box-sizing: border-box; }
@@ -105,7 +176,24 @@ a { color: inherit; }
 .nav-link:hover { background: var(--surface-muted); color: var(--text); }
 .nav-link.is-active { background: var(--primary-soft); color: var(--primary); }
 .nav-count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 0.8125rem; text-align: center; }
-.theme-toggle { margin-left: auto; }
+/* 테마 고르기 (ADR-32): 메뉴 막대 오른쪽 끝의 펼침 메뉴 */
+.theme-menu { margin-left: auto; position: relative; }
+.theme-menu summary { list-style: none; }
+.theme-menu summary::-webkit-details-marker { display: none; }
+.theme-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(300px, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.theme-options { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.theme-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font: inherit; font-size: 0.875rem; font-weight: 600;
+}
+.theme-chip:hover { background: var(--surface-muted); color: var(--text); }
+/* 고른 칩: 강조색 칩은 자기 강조색(data-accent 가 칩에도 붙어 있다)으로 테두리를 그린다 */
+.theme-chip[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.swatch { width: 14px; height: 14px; border-radius: 7px; background: var(--primary); }
 
 /* ── 배치 ───────────────────────────────────────────────── */
 .page {
@@ -166,8 +254,8 @@ a { color: inherit; }
 .button-primary:active { background: var(--primary-pressed); }
 .button-primary:disabled { background: var(--primary-disabled); border-color: var(--primary-disabled); color: var(--on-primary); }
 
-.button-on-primary { background: #ffffff; color: #3f49b8; border-color: #ffffff; }
-.button-on-primary:hover { background: #eceefc; border-color: #ffffff; }
+.button-on-primary { background: #ffffff; color: var(--hero-button-text); border-color: #ffffff; }
+.button-on-primary:hover { background: var(--hero-button-hover); border-color: #ffffff; }
 .button-on-primary:focus-visible { outline-color: #ffffff; outline-offset: 3px; }
 
 .button-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }

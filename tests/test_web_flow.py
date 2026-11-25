@@ -415,3 +415,26 @@ def test_리다이렉트_주소는_호스트_없이_슬래시로_시작한다(cl
     for response in (client.post("/study/today"), client.post("/exam/abort"), client.get("/result")):
         location = response.headers["Location"]
         assert location.startswith("/") and "://" not in location
+
+
+# ── 화면 테마 (ADR-32) ──────────────────────────────────────
+def test_테마_메뉴에_밝기와_강조색_선택지가_모두_있다(client):
+    from smartvoca.web.common import THEME_ACCENTS, THEME_BRIGHTNESS
+
+    html = client.get("/").get_data(as_text=True)
+    for value, label in THEME_BRIGHTNESS:
+        assert f'data-theme-choice="{value}"' in html and label in html
+    for value, label in THEME_ACCENTS:
+        assert f'data-accent-choice="{value}"' in html and label in html
+
+
+def test_강조색마다_CSS_블록이_있다():
+    """선택지 이름과 style.css 의 [data-accent] 블록 이름이 어긋나면 골라도 색이 바뀌지 않는다."""
+    from pathlib import Path
+
+    import smartvoca.web
+    from smartvoca.web.common import THEME_ACCENTS
+
+    css = (Path(smartvoca.web.__file__).parent / "static" / "style.css").read_text(encoding="utf-8")
+    for value, _ in THEME_ACCENTS:
+        assert f'[data-accent="{value}"]' in css, value

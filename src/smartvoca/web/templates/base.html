@@ -12,6 +12,8 @@
     try {
       var savedTheme = localStorage.getItem("smartvoca-theme");
       if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+      var savedAccent = localStorage.getItem("smartvoca-accent");
+      if (savedAccent && /^[a-z]+$/.test(savedAccent)) document.documentElement.dataset.accent = savedAccent;
     } catch (error) {}
     if (!("speechSynthesis" in window)) document.documentElement.classList.add("no-speech");
   </script>
@@ -32,8 +34,25 @@
             {%- if endpoint == "main.wrong_list" and nav_wrong_count %}<span class="nav-count">{{ nav_wrong_count }}</span>{% endif -%}
           </a>
         {% endfor %}
-        <button type="button" class="button button-ghost button-small theme-toggle" data-theme-toggle
-                aria-label="화면 테마 바꾸기" title="화면 테마 바꾸기 (자동 → 밝게 → 어둡게)">◐ <span data-theme-label>자동</span></button>
+        {#- 테마 고르기 (ADR-32): 밝기와 강조색을 따로 고른다. 열고 닫기는 <details> 가 하고, 고르기는 app.js 가 한다 -#}
+        <details class="theme-menu" data-theme-menu>
+          <summary class="button button-ghost button-small" aria-label="화면 테마 고르기" title="화면 테마 고르기">◐ 테마</summary>
+          <div class="theme-panel">
+            <p class="field-label">밝기</p>
+            <div class="theme-options" role="group" aria-label="밝기">
+              {% for value, label in theme_brightness %}
+                <button type="button" class="theme-chip" data-theme-choice="{{ value }}" aria-pressed="false">{{ label }}</button>
+              {% endfor %}
+            </div>
+            <p class="field-label">강조색</p>
+            <div class="theme-options" role="group" aria-label="강조색">
+              {% for value, label in theme_accents %}
+                <button type="button" class="theme-chip" data-accent="{{ value }}" data-accent-choice="{{ value }}" aria-pressed="false">
+                  <span class="swatch" aria-hidden="true"></span>{{ label }}</button>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
       </nav>
     </header>
   {% endblock %}
