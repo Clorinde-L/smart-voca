@@ -16,6 +16,7 @@ import secrets
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import (
     Blueprint,
@@ -56,7 +57,6 @@ EXTENSION_KEY = "smartvoca"
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_ISSUES_SHOWN = 20     # 단어장 검증 오류는 처음 20건만 보여 준다 (DL-02)
 MAX_DOTS = 60             # 문제가 이보다 많으면 번호 점 대신 막대로 보여 준다
-ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 
 bp = Blueprint("main", __name__)
 
@@ -69,8 +69,8 @@ class WebContext:
 
 def create_app(session: AppSession, secret_key: str | None = None) -> Flask:
     app = Flask(__name__)
-    # flash 알림을 쿠키에 담을 때 쓰는 키. 실행할 때마다 새로 만든다 (로그인이 없으므로 보관할 필요가 없다)
-    app.secret_key = secret_key or secrets.token_hex(16)
+    # 쿠키(flash 알림)에 서명할 때 쓰는 키. 환경변수 SECRET_KEY 로 받고, 없으면 기동할 때 무작위로 만든다 (NFR-004, R-08)
+    app.secret_key = secret_key or secrets.token_hex(32)
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
     app.extensions[EXTENSION_KEY] = WebContext(
         session, WebState(startup_notices=list(session.startup_notices))
@@ -123,20 +123,20 @@ def _save_error(error: OSError) -> None:
     flash(f"학습 기록을 저장하지 못했습니다. ({error})", "error")
 
 
-# ── 보안: 내 PC 에서만, 이 페이지에서 보낸 요청만 ─────────────────
+# ── 보안: 이 페이지에서 보낸 요청만 ─────────────────────────────
 @bp.before_app_request
 def _guard_request():
-    """다른 웹사이트가 몰래 이 서버로 요청을 보내 기록을 지우는 일을 막는다.
+    """다른 웹사이트가 몰래 이 서버로 폼을 보내 기록을 지우는 일을 막는다.
 
-    - Host 검사: 주소가 127.0.0.1·localhost 가 아니면 거절한다 (DNS 재바인딩 방어).
-    - Origin 검사: 브라우저는 폼을 보낼 때 출처(Origin)를 붙인다. 출처가 이 서버가 아니면 거절한다.
-      출처가 없는 요청(브라우저가 아닌 테스트 클라이언트 등)은 통과시킨다.
+    브라우저는 폼을 보낼 때 출처(Origin, 없으면 Referer)를 붙인다. 출처의 호스트가 이 서버가 아니면 거절한다.
+    호스트만 비교하는 이유: 학교 서버에서는 앞단 프록시가 https 를 받고 앱에는 http 로 넘기므로
+    주소 전체(http://… 와 https://…)를 비교하면 정상 요청도 막힌다 (ADR-30).
+    2026-11-25 Host 허용 목록(127.0.0.1)은 없앴다. 서버 주소는 배포 환경이 정한다.
+    출처가 없는 요청(브라우저가 아닌 테스트 클라이언트 등)은 통과시킨다.
     """
-    if request.host.rsplit(":", 1)[0] not in ALLOWED_HOSTS:
-        abort(403)
     if request.method == "POST":
         origin = request.headers.get("Origin") or request.headers.get("Referer")
-        if origin is not None and not (origin + "/").startswith(request.host_url):
+        if origin is not None and urlsplit(origin).netloc != request.host:
             abort(403)
 
 

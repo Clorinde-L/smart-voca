@@ -505,6 +505,10 @@ def test_다른_사이트에서_보낸_요청은_거절한다(client, ctx):
     assert same.status_code == 302
 
 
-def test_내_PC_주소가_아니면_거절한다(client):
-    assert client.get("/", headers={"Host": "evil.example"}).status_code == 403
-    assert client.get("/", headers={"Host": "127.0.0.1:8765"}).status_code == 200
+def test_프록시_뒤에서_https_출처라도_호스트가_같으면_받는다(client):
+    """학교 서버: 브라우저는 https 로 보내고 앱은 http 로 받는다 (ADR-30)."""
+    headers = {"Host": "lab.example", "Origin": "https://lab.example"}
+    assert client.post("/study/today", headers=headers).status_code == 302
+    referer = {"Host": "lab.example", "Referer": "https://lab.example/2026/voca-x/days"}
+    assert client.post("/study/today", headers=referer).status_code == 302
+    assert client.get("/", headers={"Host": "lab.example"}).status_code == 200

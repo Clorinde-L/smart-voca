@@ -1,4 +1,5 @@
-# 2026-11-11 - smart-voca - 실행·테스트에 필요한 패키지
+# 2026-11-11 - smart-voca - 서버 실행에 필요한 패키지 (Docker 이미지가 이 파일로 설치한다)
 # 파일 위치: requirements.txt
-Flask>=3.0
-pytest>=8
+# 실제로 import 하는 패키지만 버전을 고정해 적는다 (Dockerfile 구성 §5). 테스트 도구는 pyproject.toml 의 dev 에 있다.
+Flask==3.1.3
+gunicorn==23.0.0

@@ -1,0 +1,5 @@
+# 2026-11-25 - smart-voca - 줄바꿈 규칙: 저장소와 컨테이너에서는 LF (Dockerfile 구성 R-12)
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.pdf binary
