@@ -45,8 +45,12 @@
   --page-margin: 28px;
   --spacing: 14px;
   --radius: 14px;
-  /* 영문·숫자는 Segoe UI, 한글은 맑은 고딕 (둘 다 Windows 기본 글꼴) */
-  --font: "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  /* 한글 글꼴을 맨 앞에 둔다. 영문 글꼴(Segoe UI)을 앞에 두면 한글만 다른 글꼴로 대신 그려져
+     같은 줄에서 글자 높이·굵기가 어긋난다. 한글 글꼴은 영문·숫자도 갖고 있어 한 글꼴로 맞춰진다.
+     Mac 은 Apple SD Gothic Neo, Windows 는 맑은 고딕, 그 밖(리눅스·안드로이드)은 Noto Sans KR */
+  --font: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  /* 영단어만 나오는 자리(lang="en")는 영문 글꼴. 맑은 고딕의 영문은 폭이 좁고 투박하다 */
+  --font-en: "Segoe UI", -apple-system, "Helvetica Neue", Roboto, var(--font);
   color-scheme: light;
 }
 
@@ -82,8 +86,12 @@
 
 * { box-sizing: border-box; }
 html { font-size: 15px; }
-body { margin: 0; background: var(--background); color: var(--text); font-family: var(--font); line-height: 1.5; }
+body { margin: 0; background: var(--background); color: var(--text); font-family: var(--font); line-height: 1.5;
+  /* 한글은 낱말(띄어쓰기) 단위로 줄을 바꾼다. 기본값은 글자마다 끊어 "나 / 옵니다" 처럼 갈라진다.
+     칸보다 긴 낱말만 어쩔 수 없이 중간에서 끊는다 */
+  word-break: keep-all; overflow-wrap: break-word; }
 h1, h2, h3, p { margin: 0; }
+[lang="en"] { font-family: var(--font-en); }
 a { color: inherit; }
 
 /* ── 메뉴 막대 (ADR-22) ─────────────────────────────────── */
@@ -108,6 +116,9 @@ a { color: inherit; }
 .row.wrap { flex-wrap: wrap; }
 .row.tight { gap: 6px; }
 .grow { flex: 1; min-width: 0; }
+/* 줄바꿈 가능한 줄의 안내 글은 12글자 폭 밑으로 줄이지 않고 다음 줄로 내린다.
+   (min-width: 0 만 있으면 좁은 창에서 글자가 한 자씩 세로로 쌓인다) */
+.row.wrap > .grow { flex-basis: 12em; }
 .center { text-align: center; }
 .end { text-align: right; }
 
@@ -266,7 +277,7 @@ a.tile:hover { border-color: var(--primary); }
 .card-word { font-size: 2.9rem; font-weight: 700; overflow-wrap: anywhere; }
 /* 긴 뜻도 자르지 않고 줄바꿈한다 (NFR-07) */
 .card-meaning { font-size: 1.4rem; overflow-wrap: anywhere; }
-.check { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer; }
+.check { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
 .check input { accent-color: var(--primary); width: 16px; height: 16px; }
 
 /* ── S-03 시험 ──────────────────────────────────────────── */
@@ -311,10 +322,10 @@ a.tile:hover { border-color: var(--primary); }
 .ring-percent { font: 13px var(--font); text-anchor: middle; fill: var(--text-muted); }
 
 /* ── 표 ─────────────────────────────────────────────────── */
-.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }  /* 좁은 창에서 넘치는 표는 잘리지 않고 옆으로 밀어 본다 */
 .table-scroll { flex: 1; min-height: 240px; max-height: 60vh; overflow-y: auto; }
 .table { width: 100%; border-collapse: collapse; }
-.table-fixed { table-layout: fixed; }
+.table-fixed { table-layout: fixed; min-width: 600px; }  /* 고정 폭 칸을 빼고도 남는 칸(뜻)이 0 이 되지 않게 */
 .table th { position: sticky; top: 0; background: var(--surface-soft); color: var(--text-muted); font-weight: 600; text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
 .table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow-wrap: anywhere; }
 .table tbody tr:last-child td { border-bottom: none; }
@@ -323,6 +334,9 @@ a.tile:hover { border-color: var(--primary); }
 .table th.end, .table td.end { text-align: right; }
 .table .num { width: 48px; color: var(--text-muted); }
 .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nowrap { white-space: nowrap; }
+/* 표의 영단어는 철자 중간에서 끊지 않는다 ("acknowledg / e" 방지). 칸이 단어 길이만큼 넓어진다 */
+.table td[lang="en"], .table td [lang="en"] { overflow-wrap: normal; }
 .table a { color: var(--primary); font-weight: 600; text-decoration: none; }
 .table a:hover { text-decoration: underline; }
 
@@ -355,6 +369,10 @@ kbd { background: var(--surface); color: var(--text-muted); border: 1px solid va
   .brand-text { display: none; }
   .topbar-inner { gap: 2px; }
   .nav-link { padding: 7px 8px; }
+  /* 좁은 표에서는 한 줄 고정을 풀어 다른 칸이 한 글자 폭으로 눌리지 않게 한다 */
+  .table .nowrap { white-space: normal; }
+  .button-wide, .button-large { min-width: 0; }
+  .table th, .table td { padding: 8px 8px; }
 }
 
 /* ── 2026-11-25 기말 대응: 입력 폼, 시험 형식, 통계 (UI/UX 설계서 S-07, S-09~S-11) ───── */

@@ -42,7 +42,7 @@
           {% for item in view.wrong_items %}
             {% set q = item.question %}
             <tr>
-              <td class="strong">{{ q.prompt }}</td>
+              <td class="strong"{% if q.direction == Direction.EN_KO %} lang="en"{% endif %}>{{ q.prompt }}</td>
               <td>{{ q.answer }}</td>
               <td>
                 {%- if q.format == QuestionFormat.OX -%}
@@ -51,7 +51,7 @@
                   {{ item.given }}
                 {%- endif -%}
               </td>
-              <td class="muted">{{ q.format.label }} · {{ q.direction.label }}</td>
+              <td class="muted nowrap">{{ q.format.label }} · {{ q.direction.label }}</td>
             </tr>
           {% endfor %}
         </tbody>

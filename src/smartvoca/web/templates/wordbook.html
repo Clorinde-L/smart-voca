@@ -59,7 +59,7 @@
           {% for day_no, word in rows %}
             <tr>
               <td><a href="{{ url_for('main.day_detail', day_no=day_no) }}">{{ day_no }}일차</a></td>
-              <td class="strong">{{ word.word }}</td>
+              <td class="strong" lang="en">{{ word.word }}</td>
               <td class="ellipsis" title="{{ word.meaning }}">{{ word.meaning }}</td>
               <td class="end">
                 <span class="row tight row-end">

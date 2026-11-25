@@ -48,7 +48,7 @@
     <p class="muted center" data-testid="format">{{ question.format.label }} · {{ question.direction.label }}</p>
     {#- 영→한이면 영단어를 크게, 한→영이면 뜻을 문장 크기로 보여 준다 -#}
     <div class="card-word-row">
-      <p class="{{ 'question-word' if is_en_prompt else 'question-meaning' }}" data-testid="word">{{ question.prompt }}</p>
+      <p class="{{ 'question-word' if is_en_prompt else 'question-meaning' }}"{% if is_en_prompt %} lang="en"{% endif %} data-testid="word">{{ question.prompt }}</p>
       {% if is_en_prompt %}{{ speak_button(question.prompt, large=True, key="p") }}{% endif %}
     </div>
 
@@ -83,7 +83,7 @@
   </section>
 
   {% set is_last = run.position == run.total - 1 %}
-  <div class="row">
+  <div class="row wrap">
     <form method="post" action="{{ url_for('main.exam_goto') }}">
       <button name="position" value="{{ run.position - 1 }}" class="button" data-key="ArrowLeft"
               {% if run.position == 0 %}disabled{% endif %}>←  이전</button>

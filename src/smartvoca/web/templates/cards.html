@@ -14,7 +14,7 @@
   <section class="panel card">
     <div class="card-word-row">
       {% if card.kind.label %}<span class="kind-tag kind-{{ card.kind.value }}" data-testid="kind">{{ card.kind.label }}</span>{% endif %}
-      <p class="card-word" data-testid="word">{{ word.word }}</p>
+      <p class="card-word" lang="en" data-testid="word">{{ word.word }}</p>
       {{ speak_button(word.word, large=True, key="p") }}
     </div>
     {#- 뜻은 CSV 뜻 칸 그대로, 길면 줄바꿈 (FR-10, NFR-07). 가리기를 켜면 숨겨 두고 Space 로 연다 (UD-04) -#}
@@ -41,7 +41,7 @@
     </form>
   </div>
 
-  <div class="row">
+  <div class="row wrap">
     <p class="muted grow" data-testid="hint">
       {%- if study.mode.value == "day" -%}
         {{ "시험을 볼 수 있습니다" if study.unlocked else "남은 카드를 모두 보면 시험을 볼 수 있습니다" }}

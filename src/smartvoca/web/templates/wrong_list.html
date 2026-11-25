@@ -15,7 +15,7 @@
         <tbody>
           {% for entry in entries %}
             <tr>
-              <td><span class="word-cell">{{ speak_button(entry.word.word) }}<span class="strong">{{ entry.word.word }}</span></span></td>
+              <td><span class="word-cell">{{ speak_button(entry.word.word) }}<span class="strong" lang="en">{{ entry.word.word }}</span></span></td>
               <td>{{ entry.word.meaning }}</td>
               <td>{{ entry.wrong_count }}</td>
               <td>{{ entry.streak }} / {{ GRADUATE_STREAK }}</td>

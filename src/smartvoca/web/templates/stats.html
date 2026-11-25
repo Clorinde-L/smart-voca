@@ -90,7 +90,7 @@
           <thead><tr><th class="num">#</th><th>영단어</th><th>뜻</th><th class="end">틀린 횟수</th><th class="end">출제 횟수</th></tr></thead>
           <tbody>
             {% for row in data.frequent_wrong %}
-              <tr><td class="num">{{ loop.index }}</td><td class="strong">{{ row.word }}</td><td>{{ row.meaning }}</td><td class="end strong">{{ row.wrong_count }}</td><td class="end">{{ row.test_count }}</td></tr>
+              <tr><td class="num">{{ loop.index }}</td><td class="strong" lang="en">{{ row.word }}</td><td>{{ row.meaning }}</td><td class="end strong">{{ row.wrong_count }}</td><td class="end">{{ row.test_count }}</td></tr>
             {% endfor %}
           </tbody>
         </table>
