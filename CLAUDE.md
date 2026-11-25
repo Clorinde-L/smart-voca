@@ -13,9 +13,9 @@
 | 레이어 | 기술 |
 |--------|------|
 | 언어 | Python 3.12 (최소 3.11) |
-| 주요 라이브러리 | Flask (웹 화면, 2026-11-25 PyQt6 에서 교체 · ADR-18), pytest (테스트). 로직은 표준 라이브러리만 사용 |
-| 저장소 | 단어장 CSV, 학습 기록 JSON (`userdata/progress.json`) |
-| 실행 환경 | 로컬 Windows 11, 프로젝트 가상환경 `.venv`. 로컬 웹 서버 `127.0.0.1:8765` + 브라우저 |
+| 주요 라이브러리 | Flask (웹 화면, 2026-11-25 PyQt6 에서 교체 · ADR-18), gunicorn (서버 실행), pytest (테스트). 로직은 표준 라이브러리만 사용 |
+| 저장소 | SQLite (`sqlite3`, 환경변수 `DB_PATH`, 로컬 기본 `userdata/voca.db` · ADR-25). 단어장 CSV 는 가져오기·내보내기만 |
+| 실행 환경 | 로컬 Windows 11 `.venv` + `127.0.0.1:8765`. 제출용은 학교 서버 Docker 컨테이너 `0.0.0.0:8080` (ADR-29) |
 
 ## 상위 정책 참조
 
@@ -31,7 +31,10 @@ smart-voca/
 ├── CLAUDE.md                     # 본 문서 — Claude 운용 지침
 ├── README.md                     # 프로젝트 소개, 설치·실행 방법
 ├── pyproject.toml                # 패키지 정보, pytest 설정
-├── requirements.txt              # 실행·테스트에 필요한 패키지
+├── requirements.txt              # 서버 실행 패키지 (버전 고정, Docker 가 설치). 테스트 도구는 pyproject 의 dev
+├── Dockerfile, .dockerignore     # 학교 서버 배포 (규칙 R-01~R-16)
+├── .gitattributes                # 줄바꿈 LF 고정 (R-12)
+├── .github/workflows/docker-check.yml  # 과제 배포 점검 워크플로 — 절대 고치지 않는다
 ├── docs/                         # 승인된 최종 산출물 (방법론 §2 SDLC 산출물)
 │   └── old/                      # 예전 방식의 이전 버전 보관 (더 이상 추가하지 않음)
 ├── ai-agent/
@@ -41,12 +44,12 @@ smart-voca/
 │   └── scripts/                  # 프로젝트 전용 스크립트 (필요해지면 생성)
 ├── src/smartvoca/                # 소스 코드
 │   ├── core/                     # 도메인 로직 (표준 라이브러리만, 파일·화면을 다루지 않음)
-│   ├── storage/                  # 단어장 CSV, 학습 기록 JSON
+│   ├── storage/                  # SQLite (db.py 스키마, repository.py SQL), 단어장 CSV
 │   ├── session.py                # 화면이 쓰는 유일한 창구 (AppSession)
-│   └── web/                      # Flask 웹 화면 (app.py, state.py, templates/, static/)
+│   └── web/                      # Flask 화면 (app.py, common.py, routes_*.py, state.py, wsgi.py 서버 진입점, server.py 로컬, templates/, static/)
 ├── tests/                        # pytest
 ├── data/toeic_words.csv          # 기본 단어장 (프로그램은 읽기만 함)
-├── userdata/                     # 학습 기록, 단어장 사본 (커밋 제외, 실행하면 생성)
+├── userdata/                     # 로컬 DB voca.db (커밋 제외, 실행하면 생성)
 └── .venv/                        # 가상환경 (커밋 제외)
 ```
 
@@ -89,8 +92,10 @@ smart-voca/
 
 ## 테스트 및 배포
 
-- **테스트**: `.venv\Scripts\python -m pytest` (로직·저장소·세션·화면 흐름·계층 의존 규칙). 화면 흐름 테스트(`tests/test_web_flow.py`)는 Flask 테스트 클라이언트로 서버·브라우저 없이 돈다.
-- **실행**: `.venv\Scripts\python -m smartvoca` (최초 1회 `pip install -e ".[dev]"`). 서버를 띄우고 브라우저를 연다. 컨테이너·배포 없음.
+- **테스트**: `.venv\Scripts\python -m pytest` (로직·DB 저장소·세션·화면 흐름·계층 의존 규칙·배포 규칙 `tests/test_deploy.py`). 화면 흐름 테스트(`tests/test_web_flow.py`)는 Flask 테스트 클라이언트로 서버·브라우저 없이 돈다.
+- **실행**: `.venv\Scripts\python -m smartvoca` (최초 1회 `pip install -e ".[dev]"`). 서버를 띄우고 브라우저를 연다.
+- **배포**: 학교 서버가 리포 루트의 `Dockerfile` 로 빌드한다. 푸시하면 GitHub Actions 점검 워크플로가 같은 조건으로 확인한다. PC 에 Docker 데몬이 없으면 로컬 빌드는 못 하므로 `tests/test_deploy.py` 와 Actions 결과로 확인한다.
+- **서버 규칙**: 주소는 `url_for` 로만 만들고 `/` 로 시작하게 둔다(호스트·`localhost` 금지, R-04). 쓰기는 `/data`(DB)·`/tmp` 만. 비밀값은 환경변수(`SECRET_KEY`).
 - **패키지 설치**: 시스템 Python 이 아니라 `.venv` 에만 설치한다 (결정 기록 ADR-08).
 - **주의**: 실행하면 `userdata/` 에 학습 기록이 생긴다(커밋 제외). 처음 상태로 돌리려면 `userdata/` 를 지운다.
 - **주의**: 로직 계층(`core`, `storage`, `session.py`)에서 Flask·`web` 을 import 하거나, `web` 이 `storage` 를 직접 import 하면 `tests/test_architecture.py` 가 실패한다.
@@ -130,13 +135,13 @@ smart-voca/
 1. **문서 내용의 구체성**: 계획서는 파일명·클래스명·함수명 수준까지 명시한다.
    소스코드는 붙여넣지 않는다.
 
-2. **문서명 규칙** (방법론 §4.2 한글 네이밍): `분류_yymmdd_제목.md`
+2. **문서명 규칙** (방법론 §4.2 한글 네이밍, 과제 SUB 4.2): `분류_yymmdd_제목 vX.X.md`
    - `분류` ∈ {기획, 분석, 검토, 설계, 작업계획, 일지, 운영, 테스트, 보고서}
-   - 예: `설계_260909_시스템 구조.md`
-   - **파일명에 버전을 넣지 않는다.** 버전은 문서 헤더의 `**버전**` 과 변경 이력 표로 관리한다.
-     파일명이 바뀌지 않아야 다른 문서의 참조가 깨지지 않고, Git 에서 그날 바뀐 줄만 보인다(2026-11-18 결정).
+   - 예: `설계_260909_시스템 구조 v1.0.md`
+   - **`docs/` 문서는 파일명 끝에 현재 버전을 붙인다** (2026-11-25 결정 ADR-31, 2026-11-18 의 "파일명에 버전 없음" 을 뒤집음).
+     버전을 올리면 `git mv` 로 이름만 바꿔 한 파일의 이력을 잇고, 다른 문서·README 의 참조도 같은 커밋에서 고친다.
    - 버전 업데이트: minor 증가 (v1.0 → v1.1 → v1.2). "버전 올리자" 요청 시 major 증가.
-   - 2026-11-18 이전에 만든 `ai-agent/claude/` 문서의 파일명 버전은 기록이라 그대로 둔다.
+   - `ai-agent/claude/` 의 작업 문서(작업계획·일지·검토)는 버전을 붙이지 않아도 된다. 예전 파일명은 기록이라 그대로 둔다.
 
 3. **디렉토리명 규칙**:
    - 참고자료 디렉토리: 날짜 없이 단순 명쾌한 이름 (예: `uploads/`, `<원본명>/`)
@@ -147,7 +152,7 @@ smart-voca/
    ```markdown
    # 문서 제목
 
-   **파일 위치**: `docs/분류_날짜_제목.md`
+   **파일 위치**: `docs/분류_날짜_제목 v1.0.md`
    **작성일**: YYYY-MM-DD
    **버전**: v1.0
    **설명**: 한 문장 설명
@@ -162,11 +167,11 @@ smart-voca/
    판단되면(방법론 §2 의 공식 산출물) 사용자에게 먼저 확인하고, 승인된 경우에만 `ai-agent/claude/` → `docs/` 로
    이동(`git mv`)한다.
 
-   **`docs/` 문서 수정 절차** — 새 파일을 만들지 않고 **같은 파일을 직접 고친다.**
-   이전 버전은 Git 기록에 남으므로 따로 보관하지 않는다(`git log -p -- docs/파일명` 으로 날짜별 변경 확인).
+   **`docs/` 문서 수정 절차** — 복사본을 만들지 않고 **같은 파일을 고친 뒤 이름의 버전만 바꾼다.**
+   이전 버전은 Git 기록에 남으므로 따로 보관하지 않는다(`git log --follow -p -- "docs/파일명"` 으로 날짜별 변경 확인).
    1. 사용자 승인을 받는다.
    2. 해당 파일 내용을 직접 수정한다.
-   3. 헤더의 `**버전**` 을 올리고, 변경 이력 표에 `버전 | 일자 | 변경 내용` 한 줄을 추가한다.
+   3. 헤더의 `**버전**`·`**파일 위치**` 를 올리고, 변경 이력 표에 `버전 | 일자 | 변경 내용` 한 줄을 추가한다. `git mv` 로 파일명의 버전을 맞추고 참조를 고친다.
    4. 커밋은 문서 수정만 담아, 그날 무엇을 바꿨는지 diff 로 바로 보이게 한다.
 
    **`docs/old/`** — 2026-11-18 이전 방식(복사본으로 버전 업)으로 보관된 이전 버전. 더 이상 추가하지 않는다.
@@ -268,7 +273,7 @@ smart-voca/
 ## 프로젝트 특화 메모
 
 - **설계 문서 우선**: 코드를 고치기 전에 `docs/` 의 해당 설계 문서를 확인한다. 요구사항은 `FR-xx` / `NFR-xx`,
-  결정은 `docs/설계_261111_결정 기록` 의 `ADR-xx` 로 찾는다. 설계와 다르게 구현하게 되면 문서도 함께 고친다.
+  결정은 `docs/설계_261111_결정 기록 v1.6` 의 `ADR-xx` 로 찾는다. 설계와 다르게 구현하게 되면 문서도 함께 고친다.
 - **승인된 문서 수정**: `docs/` 의 문서는 사용자 승인 없이 고치지 않는다. 고칠 때는 문서 관리 규칙 5 의 `docs/` 문서 수정 절차(같은 파일 직접 수정)를 따른다.
 - **계층 규칙**: `core` 는 표준 라이브러리만 쓰고 파일을 다루지 않는다. 화면은 `AppSession` 만 부른다.
   색·글꼴은 `web/static/style.css` 의 `:root` 변수에만 둔다. 화면 판단(버튼 활성 등)은 `web/app.py`·`web/state.py` 에서 하고 템플릿·JS 는 그리기만 한다.
