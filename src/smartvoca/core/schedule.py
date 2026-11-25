@@ -33,19 +33,20 @@ def _record(progress: Progress, day_no: int) -> DayRecord:
 
 
 def day_status(progress: Progress, day_no: int) -> DayStatus:
-    """일차 상태. 날짜가 아니라 완료 여부로만 정한다 (FR-08)."""
+    """일차 상태. 그 일차의 기록만으로 정한다 (FR-08).
+
+    2026-11-25 잠금을 없앴다(ADR-21). 앞 일차를 끝내지 않아도 어느 일차든 학습할 수 있다.
+    """
     record = _record(progress, day_no)
     if record.tested:
         return DayStatus.DONE
     if record.memorized:
         return DayStatus.MEMORIZED
-    if day_no == 1 or _record(progress, day_no - 1).tested:
-        return DayStatus.AVAILABLE
-    return DayStatus.LOCKED
+    return DayStatus.AVAILABLE
 
 
 def current_day(progress: Progress, total_days: int) -> int | None:
-    """완료하지 않은 가장 작은 일차. 모두 완료했으면 None."""
+    """완료하지 않은 가장 작은 일차 (메인의 '오늘의 학습' 추천). 모두 완료했으면 None."""
     for day_no in range(1, total_days + 1):
         if not _record(progress, day_no).tested:
             return day_no

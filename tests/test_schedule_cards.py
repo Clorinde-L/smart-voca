@@ -57,24 +57,26 @@ def test_잘못된_크기는_거부한다(word_count, day_size):
 
 
 # ── PR-03 일차 상태 (FR-08, FR-09, FR-13, FR-20) ─────────────
-def test_처음에는_1일차만_열려_있다():
+def test_처음에는_모든_일차가_학습_전이다():
+    """잠금 없음 (ADR-21): 앞 일차를 끝내지 않아도 학습할 수 있다."""
     progress = Progress()
     assert day_status(progress, 1) is DayStatus.AVAILABLE
-    assert day_status(progress, 2) is DayStatus.LOCKED
+    assert day_status(progress, 50) is DayStatus.AVAILABLE
     assert current_day(progress, 100) == 1
 
 
-def test_시험을_제출하면_다음_일차가_열린다():
+def test_시험을_제출하면_오늘의_학습이_다음_일차로_간다():
     progress = Progress(days={1: DayRecord(memorized=True, tested=True)})
     assert day_status(progress, 1) is DayStatus.DONE
     assert day_status(progress, 2) is DayStatus.AVAILABLE
     assert current_day(progress, 100) == 2
 
 
-def test_암기만_끝낸_일차는_다음_일차를_열지_않는다():
+def test_암기만_끝낸_일차는_시험만_남는다():
     progress = Progress(days={1: DayRecord(memorized=True)})
     assert day_status(progress, 1) is DayStatus.MEMORIZED
-    assert day_status(progress, 2) is DayStatus.LOCKED
+    assert day_status(progress, 2) is DayStatus.AVAILABLE
+    assert current_day(progress, 100) == 1  # 시험을 내야 완료다
     assert can_take_exam(progress, 1)
     assert not can_take_exam(progress, 2)
     assert reviewable_days(progress, 100) == [1]

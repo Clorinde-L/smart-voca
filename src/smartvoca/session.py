@@ -140,8 +140,8 @@ class AppSession:
     # ── 일차 학습·시험 ──────────────────────────────────────
     def complete_memorize(self, day_no: int) -> None:
         """일차의 카드를 모두 봤을 때 부른다 (FR-12)."""
-        if self.day_status(day_no) is DayStatus.LOCKED:
-            raise ValueError(f"{day_no}일차는 아직 열리지 않았습니다")
+        if not 1 <= day_no <= len(self._days):
+            raise ValueError(f"{day_no}일차는 없습니다")
         progress_logic.mark_memorized(self._progress, day_no)
         self._store.save(self._progress)
 

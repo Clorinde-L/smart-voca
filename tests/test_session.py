@@ -70,10 +70,14 @@ def test_카드를_모두_보면_시험이_열리고_결과가_저장된다(tmp_
     assert {e.word for e in session.wrong_list()} == wrong_words
 
 
-def test_잠긴_일차는_암기_완료로_만들_수_없다(tmp_path):
+def test_아무_일차나_먼저_학습할_수_있다(tmp_path):
+    """잠금 없음 (ADR-21). 오늘의 학습 추천은 안 끝낸 가장 앞 일차 그대로다."""
     session = open_session(tmp_path)
+    finish_day(session, 30)
+    assert session.day_status(30) is DayStatus.DONE
+    assert session.summary().current_day == 1
     with pytest.raises(ValueError):
-        session.complete_memorize(2)
+        session.complete_memorize(len(session.days) + 1)  # 없는 일차
 
 
 def test_미응답_답안은_기록을_바꾸지_않는다(tmp_path):

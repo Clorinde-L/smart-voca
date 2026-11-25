@@ -37,8 +37,8 @@ class DayRange:
 
 
 class DayStatus(Enum):
-    LOCKED = "잠김"
-    AVAILABLE = "학습 가능"
+    # 2026-11-25 잠금(LOCKED) 폐지: 모든 일차를 자유롭게 학습한다 (ADR-21)
+    AVAILABLE = "학습 전"
     MEMORIZED = "암기 완료"
     DONE = "완료"
 
