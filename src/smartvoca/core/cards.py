@@ -11,19 +11,21 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from .models import Word
+from .models import StudyCard
 
 
 class CardDeck:
-    def __init__(self, words: Sequence[Word]):
-        if not words:
+    """2026-11-25 카드 한 장이 Word 에서 StudyCard(단어 + 복습·오답 표시)로 바뀌었다 (VOCA-FR-013)."""
+
+    def __init__(self, cards: Sequence[StudyCard]):
+        if not cards:
             raise ValueError("카드로 볼 단어가 없습니다")
-        self._words = tuple(words)
+        self._words = tuple(cards)
         self._position = 0
         self._seen = {0}  # 첫 카드는 만들자마자 본 것으로 친다
 
     @property
-    def current(self) -> Word:
+    def current(self) -> StudyCard:
         return self._words[self._position]
 
     @property
@@ -42,6 +44,10 @@ class CardDeck:
     @property
     def can_prev(self) -> bool:
         return self._position > 0
+
+    @property
+    def cards(self) -> tuple[StudyCard, ...]:
+        return self._words
 
     @property
     def seen_all(self) -> bool:

@@ -4,74 +4,63 @@
 # 파일 위치: src/smartvoca/core/schedule.py
 """진도 로직.
 
-일차는 저장하지 않고 단어 수에서 매번 계산한다.
-"현재 일차"도 저장하지 않고 일차 기록에서 계산한다 — 따로 저장하면 서로 어긋날 수 있기 때문이다.
+일차는 저장하지 않고 단어 수와 하루 학습량에서 매번 계산한다 (VOCA-FR-011).
+2026-11-25 일차 상태도 저장하지 않고 단어 단위 이력에서 계산한다 (ADR-26).
+- 암기 완료: 그 일차의 모든 단어에 암기 이력이 있다
+- 완료: 그 일차의 모든 단어가 일차 시험에 나온 적이 있다
+그래서 하루 학습량을 바꾸거나 단어를 더하고 지워도 "외운 단어는 외운 것"으로 남는다.
 """
 from __future__ import annotations
 
-from .models import DAY_SIZE, DayRange, DayRecord, DayStatus, Progress, ProgressSummary
+from collections.abc import Sequence, Set
 
-_EMPTY_DAY = DayRecord()
-
-
-def build_days(word_count: int, day_size: int = DAY_SIZE) -> list[DayRange]:
-    """단어를 순서대로 day_size 개씩 나눈다. 마지막 일차는 남은 단어로 구성한다 (FR-07)."""
-    if word_count < 1:
-        raise ValueError("단어 수는 1 이상이어야 합니다")
-    if day_size < 1:
-        raise ValueError("일차당 단어 수는 1 이상이어야 합니다")
-    days = []
-    for start in range(0, word_count, day_size):
-        day_no = start // day_size + 1
-        days.append(DayRange(day_no, start, min(start + day_size, word_count)))
-    return days
+from .models import DayRange, DayStatus, Word
 
 
-def _record(progress: Progress, day_no: int) -> DayRecord:
-    # 기록이 없는 일차는 암기·시험 모두 하지 않은 것으로 본다
-    return progress.days.get(day_no, _EMPTY_DAY)
+def build_days(word_count: int, day_size: int) -> list[DayRange]:
+    """단어를 순서대로 day_size 개씩 나눈다. 마지막 일차는 남은 단어로 구성한다.
 
-
-def day_status(progress: Progress, day_no: int) -> DayStatus:
-    """일차 상태. 그 일차의 기록만으로 정한다 (FR-08).
-
-    2026-11-25 잠금을 없앴다(ADR-21). 앞 일차를 끝내지 않아도 어느 일차든 학습할 수 있다.
+    단어가 하나도 없으면 일차도 없다 (단어를 모두 지운 경우).
     """
-    record = _record(progress, day_no)
-    if record.tested:
+    if word_count < 0:
+        raise ValueError("단어 수는 0 이상이어야 합니다")
+    if day_size < 1:
+        raise ValueError("하루 학습량은 1 이상이어야 합니다")
+    return [
+        DayRange(start // day_size + 1, start, min(start + day_size, word_count))
+        for start in range(0, word_count, day_size)
+    ]
+
+
+def day_of(index: int, day_size: int) -> int:
+    """단어장 순번(0 부터)이 속한 일차."""
+    return index // day_size + 1
+
+
+def day_status(day_words: Sequence[Word], studied_ids: Set[int], tested_ids: Set[int]) -> DayStatus:
+    """일차 상태. 그 일차 단어의 이력만으로 정한다 (FR-08, ADR-21, ADR-26)."""
+    ids = [word.id for word in day_words]
+    if ids and all(word_id in tested_ids for word_id in ids):
         return DayStatus.DONE
-    if record.memorized:
+    if ids and all(word_id in studied_ids for word_id in ids):
         return DayStatus.MEMORIZED
     return DayStatus.AVAILABLE
 
 
-def current_day(progress: Progress, total_days: int) -> int | None:
+def all_day_statuses(
+    words: Sequence[Word], days: Sequence[DayRange], studied_ids: Set[int], tested_ids: Set[int]
+) -> list[DayStatus]:
+    return [day_status(words[day.start : day.end], studied_ids, tested_ids) for day in days]
+
+
+def current_day(statuses: Sequence[DayStatus]) -> int | None:
     """완료하지 않은 가장 작은 일차 (메인의 '오늘의 학습' 추천). 모두 완료했으면 None."""
-    for day_no in range(1, total_days + 1):
-        if not _record(progress, day_no).tested:
+    for day_no, status in enumerate(statuses, start=1):
+        if status is not DayStatus.DONE:
             return day_no
     return None
 
 
-def can_take_exam(progress: Progress, day_no: int) -> bool:
-    """암기 완료 이상인 일차만 시험을 볼 수 있다 (FR-13)."""
-    return day_status(progress, day_no) in (DayStatus.MEMORIZED, DayStatus.DONE)
-
-
-def reviewable_days(progress: Progress, total_days: int) -> list[int]:
-    """복습·재시험 대상: 암기 완료 이상인 일차 (FR-20)."""
-    return [d for d in range(1, total_days + 1) if can_take_exam(progress, d)]
-
-
-def progress_summary(progress: Progress, total_days: int) -> ProgressSummary:
-    """메인 화면에 보여 줄 진도 현황 (FR-09)."""
-    done_days = sum(
-        1 for d in range(1, total_days + 1) if _record(progress, d).tested
-    )
-    wrong_list_size = sum(1 for r in progress.words.values() if r.in_wrong_list)
-    return ProgressSummary(
-        current_day=current_day(progress, total_days),
-        total_days=total_days,
-        done_days=done_days,
-        wrong_list_size=wrong_list_size,
-    )
+def can_take_exam(status: DayStatus) -> bool:
+    """암기 완료 이상인 일차만 일차 시험을 볼 수 있다 (FR-13)."""
+    return status in (DayStatus.MEMORIZED, DayStatus.DONE)

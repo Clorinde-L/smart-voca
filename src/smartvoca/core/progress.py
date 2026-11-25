@@ -1,106 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-11 - smart-voca - 학습 기록을 바꾸는 규칙: 암기 완료, 시험 결과 반영, 오답 목록, 정합화
+# 2026-11-11 - smart-voca - 시험 결과를 오답 목록에 반영하는 규칙 (PR-07, PR-08)
 # 파일 위치: src/smartvoca/core/progress.py
-"""학습 기록 변경 규칙 (PR-04, PR-07, PR-08, PR-09, PR-11, PR-12).
+"""오답 목록 규칙 (FR-17, FR-25).
 
-이 모듈의 함수는 기록을 바꾸기만 하고 저장하지 않는다.
-저장은 부른 쪽(AppSession)이 한다 — 그래야 이 규칙들을 파일 없이 테스트할 수 있다.
+이 모듈의 함수는 새 기록을 계산하기만 하고 저장하지 않는다.
+저장은 부른 쪽(AppSession → storage.repository)이 한다 — 그래야 규칙을 DB 없이 테스트할 수 있다.
+2026-11-25 기록이 JSON 에서 SQLite 로 옮겨 가면서(ADR-25) 일차 기록 규칙은 schedule.py 의 계산으로 바뀌었다.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping
 
-from .models import (
-    GRADUATE_STREAK,
-    DayRecord,
-    ExamResult,
-    Progress,
-    Word,
-    WordRecord,
-    WrongEntry,
-)
-from .schedule import can_take_exam
+from .models import GRADUATE_STREAK, ExamKind, ExamResult, WrongRecord
 
 
-def new_progress() -> Progress:
-    """빈 학습 기록 (1일차만 열린 초기 상태)."""
-    return Progress()
+def apply_exam_to_wrong_records(
+    records: Mapping[int, WrongRecord], result: ExamResult, kind: ExamKind
+) -> tuple[dict[int, WrongRecord], list[int]]:
+    """시험 결과로 바뀐 오답 기록과, 이번에 오답 목록에서 빠진 단어 번호를 돌려준다.
 
-
-def mark_memorized(progress: Progress, day_no: int) -> None:
-    """일차를 암기 완료로 기록한다 (FR-12)."""
-    progress.days.setdefault(day_no, DayRecord()).memorized = True
-
-
-def apply_day_exam_result(progress: Progress, day_no: int, result: ExamResult) -> None:
-    """일차 시험 결과를 반영한다 (FR-17, FR-18, FR-19).
-
-    틀린 단어만 기록을 바꾼다. 맞힌 단어의 연속 정답 횟수는 건드리지 않는다 —
-    연속 정답은 오답 시험에서만 센다 (요구사항 명세서 D-05).
+    - 틀린 단어: 누적 오답 +1, 연속 정답 0, 목록에 올림 (모든 시험)
+    - 맞힌 단어: 오답 시험에서, 목록에 있는 단어만 연속 정답 +1. 3 이 되면 목록에서 뺀다.
+      일차·실력 시험에서 맞힌 것은 연속 정답으로 세지 않는다 (요구사항 명세서 D-05)
+    - 목록에서 빠져도 누적 오답 횟수는 유지한다 (D-06)
+    돌려주는 dict 에는 바뀐 단어만 들어 있다.
     """
-    if not can_take_exam(progress, day_no):
-        raise ValueError(f"{day_no}일차는 아직 시험을 볼 수 없습니다")
-    for item in result.wrong_items:
-        record = progress.words.setdefault(item.word, WordRecord())
-        record.wrong_count += 1
-        record.streak = 0
-        record.in_wrong_list = True
-    # 점수와 관계없이 완료 처리한다. 재시험이면 이미 True 다.
-    progress.days.setdefault(day_no, DayRecord()).tested = True
+    changed: dict[int, WrongRecord] = {}
+    graduated: list[int] = []
 
+    def current(word_id: int) -> WrongRecord:
+        return changed.get(word_id) or records.get(word_id) or WrongRecord()
 
-def apply_wrong_exam_result(progress: Progress, result: ExamResult) -> list[str]:
-    """오답 시험 결과를 반영하고, 이번에 오답 목록에서 빠진 단어를 돌려준다 (FR-25)."""
-    graduated = []
-    for word in result.correct_words:
-        record = progress.words.get(word)
-        if record is None or not record.in_wrong_list:
-            continue  # 오답 목록에 없는 단어는 연속 정답을 세지 않는다
-        record.streak += 1
-        if record.streak >= GRADUATE_STREAK:
-            record.in_wrong_list = False
-            record.streak = 0
-            graduated.append(word)  # 누적 오답 횟수는 그대로 둔다 (D-06)
-    for item in result.wrong_items:
-        record = progress.words.setdefault(item.word, WordRecord())
-        record.wrong_count += 1
-        record.streak = 0
-        record.in_wrong_list = True
-    return graduated
-
-
-def sorted_wrong_list(progress: Progress, wordbook: Sequence[Word]) -> list[WrongEntry]:
-    """오답 목록을 오답 횟수 내림차순, 같으면 단어장 순서로 돌려준다 (FR-22)."""
-    entries = []
-    for word in wordbook:  # 단어장 순서로 훑으므로 정렬 뒤에도 같은 횟수끼리는 단어장 순서다
-        record = progress.words.get(word.word)
-        if record is not None and record.in_wrong_list:
-            entries.append(WrongEntry(word.word, record.wrong_count, record.streak))
-    entries.sort(key=lambda entry: -entry.wrong_count)  # sort 는 안정 정렬
-    return entries
-
-
-def reconcile_progress(
-    progress: Progress, wordbook: Sequence[Word], total_days: int
-) -> Progress:
-    """기록을 현재 단어장에 맞춘다. 맞지 않는 항목만 버리거나 고친다 (데이터 설계서 §5.5)."""
-    known_words = {word.word for word in wordbook}
-    days = {}
-    for day_no, record in progress.days.items():
-        if not 1 <= day_no <= total_days:
-            continue
-        days[day_no] = DayRecord(
-            memorized=record.memorized or record.tested,  # 시험을 봤으면 암기도 끝난 것
-            tested=record.tested,
-        )
-    words = {}
-    for word, record in progress.words.items():
-        if word not in known_words:
-            continue
-        words[word] = WordRecord(
-            wrong_count=record.wrong_count,
-            streak=record.streak if record.in_wrong_list else 0,
-            in_wrong_list=record.in_wrong_list,
-        )
-    return Progress(days=days, words=words)
+    if kind is ExamKind.WRONG:
+        for word_id in result.correct_word_ids:
+            record = current(word_id)
+            if not record.in_list:
+                continue
+            streak = record.streak + 1
+            if streak >= GRADUATE_STREAK:
+                changed[word_id] = WrongRecord(record.wrong_count, 0, False)
+                graduated.append(word_id)
+            else:
+                changed[word_id] = WrongRecord(record.wrong_count, streak, True)
+    for word_id in result.wrong_word_ids:
+        record = current(word_id)
+        changed[word_id] = WrongRecord(record.wrong_count + 1, 0, True)
+    return changed, graduated
